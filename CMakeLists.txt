@@ -24,7 +24,14 @@ FetchContent_MakeAvailable(SDL3)
 include(wgpu)
 
 add_executable(${TARGET})
-target_sources(${TARGET} PRIVATE main.cpp)
+target_sources(${TARGET} PRIVATE sdl3webgpu.h sdl3webgpu.c main.cpp)
+set_source_files_properties("sdl3webgpu.c" PROPERTIES COMPILE_FLAGS "-x objective-c")
+
 target_compile_features(${TARGET} PRIVATE cxx_std_20)
 
-target_link_libraries(${TARGET} PRIVATE SDL3::SDL3 wgpu)
+target_link_libraries(${TARGET} 
+PRIVATE SDL3::SDL3 wgpu
+"-framework QuartzCore"
+"-framework Cocoa"
+"-framework Metal"
+)
