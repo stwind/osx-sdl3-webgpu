@@ -7,6 +7,10 @@ list(PREPEND CMAKE_MODULE_PATH
     ${CMAKE_CURRENT_LIST_DIR}/cmake/
 )
 
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
 include(FetchContent)
 include(utils)
 
@@ -17,8 +21,10 @@ FetchContent_DeclareShallowGit(
 )
 FetchContent_MakeAvailable(SDL3)
 
+include(wgpu)
+
 add_executable(${TARGET})
 target_sources(${TARGET} PRIVATE main.cpp)
 target_compile_features(${TARGET} PRIVATE cxx_std_20)
 
-target_link_libraries(${TARGET} PRIVATE SDL3::SDL3)
+target_link_libraries(${TARGET} PRIVATE SDL3::SDL3 wgpu)
