@@ -1,5 +1,4 @@
-#ifndef _sdl3_webgpu_h_
-#define _sdl3_webgpu_h_
+#pragma once
 
 #include <webgpu.h>
 #include <SDL3/SDL.h>
@@ -13,5 +12,3 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-
-#endif // _sdl3_webgpu_h_
