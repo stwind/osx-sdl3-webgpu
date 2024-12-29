@@ -26,8 +26,7 @@ FetchContent_MakeAvailable(SDL3)
 
 include(wgpu)
 
-add_executable(${TARGET} sdl3webgpu.h sdl3webgpu.c main.cpp)
-set_source_files_properties("sdl3webgpu.c" PROPERTIES COMPILE_FLAGS "-x objective-c")
+add_executable(${TARGET} sdl3webgpu.h sdl3webgpu.mm main.cpp)
 
 target_link_libraries(${TARGET} 
 PRIVATE SDL3::SDL3 wgpu
