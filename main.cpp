@@ -52,7 +52,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   if (not SDL_Init(SDL_INIT_VIDEO)) return SDL_Fail();
 
-  SDL_Window* window = SDL_CreateWindow("Window", 352, 430, SDL_WINDOW_RESIZABLE);
+  SDL_Window* window = SDL_CreateWindow("Window", 1280, 720, SDL_WINDOW_RESIZABLE);
   if (not window) return SDL_Fail();
 
   WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
@@ -111,7 +111,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
-  // WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8Unorm;
   WGPUSurfaceConfiguration surfaceConfiguration;
   surfaceConfiguration.nextInChain = nullptr;
   surfaceConfiguration.device = device;
@@ -221,7 +220,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) return SDL_Fail();
 
   WGPUTextureViewDescriptor viewDescriptor;
-  viewDescriptor.nextInChain = nullptr;
   viewDescriptor.label = "Surface texture view";
   viewDescriptor.format = wgpuTextureGetFormat(surfaceTexture.texture);
   viewDescriptor.dimension = WGPUTextureViewDimension_2D;
@@ -232,6 +230,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   viewDescriptor.aspect = WGPUTextureAspect_All;
   WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
 
+  // image
   // WGPUCommandEncoderDescriptor encoderDesc = {};
   // encoderDesc.label = "My command encoder";
   // WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
@@ -261,6 +260,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   // wgpuQueueSubmit(app->queue, 1, &command);
   // wgpuCommandBufferRelease(command);
 
+
+  // gui
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
@@ -294,6 +295,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
   wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
   wgpuCommandBufferRelease(cmd_buffer);
+
 
   wgpuTextureViewRelease(targetView);
   wgpuSurfacePresent(app->surface);
