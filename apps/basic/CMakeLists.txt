@@ -36,7 +36,7 @@ main.cpp
 
 target_include_directories(${TARGET} PUBLIC
 ${IMGUI_INCLUDES}
-${ROOT}/include()
+${ROOT}/include
 )
 
 target_compile_definitions(${TARGET} PUBLIC
