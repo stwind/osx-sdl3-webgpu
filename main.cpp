@@ -162,6 +162,9 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO(); (void)io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
   ImGui::StyleColorsDark();
   ImGui_ImplSDL3_InitForOther(window);
 
@@ -170,7 +173,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   init_info.NumFramesInFlight = 3;
   init_info.RenderTargetFormat = surfaceFormat;
   init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
-  if (!ImGui_ImplWGPU_Init(&init_info)) return SDL_Fail();
+  if (not ImGui_ImplWGPU_Init(&init_info)) return SDL_Fail();
 
   SDL_ShowWindow(window);
   {
@@ -263,8 +266,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-  auto* app = (AppState*)appstate;
-
   if (event->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;
 
   ImGui_ImplSDL3_ProcessEvent(event);
@@ -273,6 +274,10 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+  ImGui_ImplWGPU_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
+  ImGui::DestroyContext();
+
   auto* app = (AppState*)appstate;
   wgpuRenderPipelineRelease(app->pipeline);
   wgpuQueueRelease(app->queue);
@@ -281,9 +286,6 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
   wgpuSurfaceRelease(app->surface);
   SDL_DestroyWindow(app->window);
   delete app;
-
-  ImGui_ImplSDL3_Shutdown();
-  ImGui::DestroyContext();
 
   SDL_Log("Application quit successfully!");
 }
