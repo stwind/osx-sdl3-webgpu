@@ -70,7 +70,8 @@ void ImGui_render(WGPUDevice device, WGPUTextureView view, WGPUQueue queue) {
   wgpuCommandBufferRelease(command);
 };
 
-void requestAdapter(WGPUSurface surface, WGPUInstance instance, WGPUAdapter* adapter) {
+WGPUAdapter requestAdapter(WGPUSurface surface, WGPUInstance instance) {
+  WGPUAdapter adapter;
   wgpuInstanceRequestAdapter(instance, new WGPURequestAdapterOptions{
   .compatibleSurface = surface,
   .powerPreference = WGPUPowerPreference_HighPerformance,
@@ -79,10 +80,12 @@ void requestAdapter(WGPUSurface surface, WGPUInstance instance, WGPUAdapter* ada
     }, [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
       if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter*)(userdata) = adapter;
       else throw std::runtime_error(message);
-    }, adapter);
+    }, &adapter);
+  return adapter;
 };
 
-void requestDevice(WGPUAdapter adapter, WGPUDevice* device) {
+WGPUDevice requestDevice(WGPUAdapter adapter) {
+  WGPUDevice device;
   WGPUSupportedLimits supportedLimits;
   wgpuAdapterGetLimits(adapter, &supportedLimits);
   wgpuAdapterRequestDevice(adapter, new WGPUDeviceDescriptor{
@@ -98,7 +101,8 @@ void requestDevice(WGPUAdapter adapter, WGPUDevice* device) {
     }, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
       if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
       else throw std::runtime_error(message);
-    }, device);
+    }, &device);
+  return device;
 }
 
 void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
@@ -152,12 +156,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
   WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
 
-  WGPUAdapter adapter;
-  requestAdapter(surface, instance, &adapter);
+  WGPUAdapter adapter = requestAdapter(surface, instance);
   wgpuInstanceRelease(instance);
 
-  WGPUDevice device;
-  requestDevice(adapter, &device);
+  WGPUDevice device = requestDevice(adapter);
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
