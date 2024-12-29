@@ -32,6 +32,23 @@ fn fs_main() -> @location(0) vec4f {
 }
 )";
 
+bool initIMGUI(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO(); (void)io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+  ImGui::StyleColorsDark();
+  ImGui_ImplSDL3_InitForOther(window);
+
+  ImGui_ImplWGPU_InitInfo init_info;
+  init_info.Device = device;
+  init_info.NumFramesInFlight = 3;
+  init_info.RenderTargetFormat = surfaceFormat;
+  init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
+  return ImGui_ImplWGPU_Init(&init_info);
+}
+
 struct AppState {
   SDL_Window* window;
 
@@ -54,7 +71,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
   WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
-  SDL_Log("surface = %p", (void*)surface);
 
   WGPUAdapter adapter = nullptr;
   wgpuInstanceRequestAdapter(instance, new WGPURequestAdapterOptions{
@@ -66,7 +82,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter*)(userdata) = adapter;
       else throw std::runtime_error(message);
     }, &adapter);
-  SDL_Log("Adapter: %p", adapter);
   wgpuInstanceRelease(instance);
 
   WGPUSupportedLimits supportedLimits;
@@ -90,7 +105,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
       else throw std::runtime_error(message);
     }, &device);
-  SDL_Log("Device: %p", device);
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
@@ -158,22 +172,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuShaderModuleRelease(shaderModule);
 
   *appstate = new AppState{ window, device, surface, queue, pipeline };
-  SDL_Log("Application started successfully!");
-
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-  ImGui::StyleColorsDark();
-  ImGui_ImplSDL3_InitForOther(window);
-
-  ImGui_ImplWGPU_InitInfo init_info;
-  init_info.Device = device;
-  init_info.NumFramesInFlight = 3;
-  init_info.RenderTargetFormat = surfaceFormat;
-  init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
-  if (not ImGui_ImplWGPU_Init(&init_info)) return SDL_Fail();
+  if (not initIMGUI(window, device, surfaceFormat)) return SDL_Fail();
 
   SDL_ShowWindow(window);
   {
@@ -187,6 +186,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     }
   }
 
+  SDL_Log("Started");
   return SDL_APP_CONTINUE;
 }
 
@@ -223,10 +223,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
   wgpuRenderPassEncoderEnd(renderPass);
   wgpuRenderPassEncoderRelease(renderPass);
-
   WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder);
-
   wgpuQueueSubmit(app->queue, 1, &command);
   wgpuCommandBufferRelease(command);
 
@@ -236,9 +234,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   ImGui::NewFrame();
   ImGui::ShowDemoWindow();
   ImGui::Render();
-
   WGPUCommandEncoder encoder1 = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
-
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder1, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
     .colorAttachments = new WGPURenderPassColorAttachment{
@@ -253,7 +249,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   wgpuRenderPassEncoderRelease(pass);
   WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder1, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder1);
-
   wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
   wgpuCommandBufferRelease(cmd_buffer);
 
