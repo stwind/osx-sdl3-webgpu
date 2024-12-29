@@ -235,11 +235,12 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   WGPUCommandEncoderDescriptor encoderDesc = {};
   WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
 
-  WGPURenderPassColorAttachment renderPassColorAttachment = {};
-  renderPassColorAttachment.view = targetView;
-  renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
-  renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
-  renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
+  WGPURenderPassColorAttachment renderPassColorAttachment = {
+    .view = targetView,
+    .loadOp = WGPULoadOp_Clear,
+    .storeOp = WGPUStoreOp_Store,
+    .clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 },
+  };
 
   WGPURenderPassDescriptor renderPassDesc = {
     .colorAttachmentCount = 1,
