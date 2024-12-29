@@ -105,15 +105,15 @@ void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device
   int bbwidth, bbheight;
   SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
   wgpuSurfaceConfigure(surface, new WGPUSurfaceConfiguration{
-  .device = device,
-  .format = surfaceFormat,
-  .usage = WGPUTextureUsage_RenderAttachment,
-  .viewFormatCount = 1,
-  .viewFormats = &surfaceFormat,
-  .alphaMode = WGPUCompositeAlphaMode_Auto,
-  .presentMode = WGPUPresentMode_Fifo,
-  .width = (uint32_t)bbwidth,
-  .height = (uint32_t)bbheight,
+    .device = device,
+    .format = surfaceFormat,
+    .usage = WGPUTextureUsage_RenderAttachment,
+    .viewFormatCount = 1,
+    .viewFormats = &surfaceFormat,
+    .alphaMode = WGPUCompositeAlphaMode_Auto,
+    .presentMode = WGPUPresentMode_Fifo,
+    .width = (uint32_t)bbwidth,
+    .height = (uint32_t)bbheight,
     });
 }
 
