@@ -49,31 +49,27 @@ SDL_AppResult SDL_Fail() {
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-  WGPUInstanceDescriptor desc;
-  desc.nextInChain = NULL;
-  WGPUInstance instance = wgpuCreateInstance(&desc);
-
   if (not SDL_Init(SDL_INIT_VIDEO)) return SDL_Fail();
 
   SDL_Window* window = SDL_CreateWindow("Window", 1280, 720, SDL_WINDOW_RESIZABLE);
   if (not window) return SDL_Fail();
 
+  WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
   WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
   SDL_Log("surface = %p", (void*)surface);
 
   WGPUAdapter adapter = nullptr;
-  auto requestAdapterCallback = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
-    if (status == WGPURequestAdapterStatus_Success)
-      *(WGPUAdapter*)(userdata) = adapter;
-    else
-      throw std::runtime_error(message);
-    };
   wgpuInstanceRequestAdapter(instance, new WGPURequestAdapterOptions{
     .compatibleSurface = surface,
     .powerPreference = WGPUPowerPreference_HighPerformance,
     .forceFallbackAdapter = false,
     .backendType = WGPUBackendType_Undefined,
-    }, requestAdapterCallback, &adapter);
+    }, [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
+      if (status == WGPURequestAdapterStatus_Success)
+        *(WGPUAdapter*)(userdata) = adapter;
+      else
+        throw std::runtime_error(message);
+    }, &adapter);
   SDL_Log("Adapter: %p", adapter);
   wgpuInstanceRelease(instance);
 
@@ -89,19 +85,17 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
   };
 
-  auto requestDeviceCallback = [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
-    if (status == WGPURequestDeviceStatus_Success)
-      *(WGPUDevice*)(userdata) = device;
-    else
-      throw std::runtime_error(message);
-    };
-
   WGPUDevice device;
   wgpuAdapterRequestDevice(adapter, new WGPUDeviceDescriptor{
     .requiredFeatureCount = 3,
     .requiredFeatures = requiredFeatures,
     .requiredLimits = &requiredLimits,
-    }, requestDeviceCallback, &device);
+    }, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
+      if (status == WGPURequestDeviceStatus_Success)
+        *(WGPUDevice*)(userdata) = device;
+      else
+        throw std::runtime_error(message);
+    }, &device);
   SDL_Log("Device: %p", device);
   wgpuAdapterRelease(adapter);
 
