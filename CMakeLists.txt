@@ -43,14 +43,16 @@ ${imgui_SOURCE_DIR}/imgui_tables.cpp
 ${imgui_SOURCE_DIR}/imgui_widgets.cpp
 )
 
+file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*")
+
 add_executable(${TARGET} 
-sdl3webgpu.h sdl3webgpu.mm main.cpp
+${SOURCES}
 ${IMGUI_SOURCES}
 )
 
 target_include_directories(${TARGET} PUBLIC
-  ${imgui_SOURCE_DIR}
-  ${imgui_SOURCE_DIR}/backends
+${imgui_SOURCE_DIR}
+${imgui_SOURCE_DIR}/backends
 )
 
 target_compile_definitions(${TARGET} PUBLIC

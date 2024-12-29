@@ -38,6 +38,7 @@ bool initIMGUI(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surfaceF
   ImGuiIO& io = ImGui::GetIO(); (void)io;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+  io.IniFilename = nullptr;
   ImGui::StyleColorsDark();
   ImGui_ImplSDL3_InitForOther(window);
 
