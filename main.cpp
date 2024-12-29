@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_events.h>
 #include <cmath>
 #include <iostream>
 #include <webgpu.h>
@@ -38,6 +39,8 @@ struct AppState {
   WGPUSurface surface;
   WGPUQueue queue;
   WGPURenderPipeline pipeline;
+
+  bool open;
 };
 
 SDL_AppResult SDL_Fail() {
@@ -58,13 +61,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
   SDL_Log("surface = %p", (void*)surface);
 
-  WGPURequestAdapterOptions requestAdapterOptions = {
-    .compatibleSurface = surface,
-    .powerPreference = WGPUPowerPreference_HighPerformance,
-    .forceFallbackAdapter = false,
-    .backendType = WGPUBackendType_Undefined,
-  };
-
   WGPUAdapter adapter = nullptr;
   auto requestAdapterCallback = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
     if (status == WGPURequestAdapterStatus_Success)
@@ -72,7 +68,12 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     else
       throw std::runtime_error(message);
     };
-  wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, requestAdapterCallback, &adapter);
+  wgpuInstanceRequestAdapter(instance, new WGPURequestAdapterOptions{
+    .compatibleSurface = surface,
+    .powerPreference = WGPUPowerPreference_HighPerformance,
+    .forceFallbackAdapter = false,
+    .backendType = WGPUBackendType_Undefined,
+    }, requestAdapterCallback, &adapter);
   SDL_Log("Adapter: %p", adapter);
   wgpuInstanceRelease(instance);
 
@@ -88,11 +89,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
   };
 
-  WGPUDeviceDescriptor deviceDescriptor = {
-    .requiredFeatureCount = 3,
-    .requiredFeatures = requiredFeatures,
-    .requiredLimits = &requiredLimits,
-  };
   auto requestDeviceCallback = [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
     if (status == WGPURequestDeviceStatus_Success)
       *(WGPUDevice*)(userdata) = device;
@@ -101,14 +97,18 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     };
 
   WGPUDevice device;
-  wgpuAdapterRequestDevice(adapter, &deviceDescriptor, requestDeviceCallback, &device);
+  wgpuAdapterRequestDevice(adapter, new WGPUDeviceDescriptor{
+    .requiredFeatureCount = 3,
+    .requiredFeatures = requiredFeatures,
+    .requiredLimits = &requiredLimits,
+    }, requestDeviceCallback, &device);
   SDL_Log("Device: %p", device);
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
   int bbwidth, bbheight;
   SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-  WGPUSurfaceConfiguration surfaceConfiguration = {
+  wgpuSurfaceConfigure(surface, new WGPUSurfaceConfiguration{
     .device = device,
     .format = surfaceFormat,
     .usage = WGPUTextureUsage_RenderAttachment,
@@ -118,9 +118,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     .presentMode = WGPUPresentMode_Fifo,
     .width = (uint32_t)bbwidth,
     .height = (uint32_t)bbheight,
-  };
-
-  wgpuSurfaceConfigure(surface, &surfaceConfiguration);
+    });
   WGPUQueue queue = wgpuDeviceGetQueue(device);
 
   WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
@@ -129,39 +127,28 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       .sType = WGPUSType_ShaderModuleWGSLDescriptor
     }
   };
-  WGPUShaderModuleDescriptor shaderDesc = {
+  WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
     .nextInChain = &shaderCodeDesc.chain
-  };
-  WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderDesc);
-
-  WGPUBlendState blendState = {
-  .color = {
-    .srcFactor = WGPUBlendFactor_SrcAlpha,
-    .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-    .operation = WGPUBlendOperation_Add
-  },
-  .alpha = {
-    .srcFactor = WGPUBlendFactor_Zero,
-    .dstFactor = WGPUBlendFactor_One,
-    .operation = WGPUBlendOperation_Add
-  }
-  };
+    });
 
   WGPUColorTargetState colorTarget = {
     .format = surfaceFormat,
-    .blend = &blendState,
+    .blend = new WGPUBlendState{
+      .color = {
+        .srcFactor = WGPUBlendFactor_SrcAlpha,
+        .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+        .operation = WGPUBlendOperation_Add
+      },
+      .alpha = {
+        .srcFactor = WGPUBlendFactor_Zero,
+        .dstFactor = WGPUBlendFactor_One,
+        .operation = WGPUBlendOperation_Add
+      }
+    },
     .writeMask = WGPUColorWriteMask_All
   };
 
-  WGPUFragmentState fragmentState = {
-    .module = shaderModule,
-    .entryPoint = "fs_main",
-    .constantCount = 0,
-    .targetCount = 1,
-    .targets = &colorTarget
-  };
-
-  WGPURenderPipelineDescriptor pipelineDesc = {
+  WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
     .vertex.bufferCount = 0,
     .vertex.module = shaderModule,
     .vertex.entryPoint = "vs_main",
@@ -170,15 +157,19 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     .primitive.stripIndexFormat = WGPUIndexFormat_Undefined,
     .primitive.frontFace = WGPUFrontFace_CCW,
     .primitive.cullMode = WGPUCullMode_None,
-    .fragment = &fragmentState,
+    .fragment = new WGPUFragmentState{
+      .module = shaderModule,
+      .entryPoint = "fs_main",
+      .constantCount = 0,
+      .targetCount = 1,
+      .targets = &colorTarget
+    },
     .multisample = {
       .count = 1,
       .mask = ~0u,
       .alphaToCoverageEnabled = false
     }
-  };
-
-  WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
+    });
 
   wgpuShaderModuleRelease(shaderModule);
 
@@ -194,7 +185,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     }
   }
 
-  *appstate = new AppState{ window, device, surface, queue, pipeline };
+  *appstate = new AppState{ window, device, surface, queue, pipeline, false };
   SDL_Log("Application started successfully!");
 
   IMGUI_CHECKVERSION();
@@ -219,7 +210,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   wgpuSurfaceGetCurrentTexture(app->surface, &surfaceTexture);
   if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) return SDL_Fail();
 
-  WGPUTextureViewDescriptor viewDescriptor = {
+  WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
     .format = wgpuTextureGetFormat(surfaceTexture.texture),
     .dimension = WGPUTextureViewDimension_2D,
     .baseMipLevel = 0,
@@ -227,66 +218,57 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     .baseArrayLayer = 0,
     .arrayLayerCount = 1,
     .aspect = WGPUTextureAspect_All,
-  };
-  WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
+    });
 
   // image
-  WGPUCommandEncoderDescriptor encoderDesc = {};
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
-
-  WGPURenderPassColorAttachment renderPassColorAttachment = {
-    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-    .view = targetView,
-    .loadOp = WGPULoadOp_Clear,
-    .storeOp = WGPUStoreOp_Store,
-    .clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 },
-  };
-  WGPURenderPassDescriptor renderPassDesc = {
+  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
+  WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
-    .colorAttachments = &renderPassColorAttachment
-  };
-
-  WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+    .colorAttachments = new WGPURenderPassColorAttachment{
+      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+      .view = targetView,
+      .loadOp = WGPULoadOp_Clear,
+      .storeOp = WGPUStoreOp_Store,
+      .clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 },
+    }
+    });
   wgpuRenderPassEncoderSetPipeline(renderPass, app->pipeline);
   wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
   wgpuRenderPassEncoderEnd(renderPass);
   wgpuRenderPassEncoderRelease(renderPass);
 
-  WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-  WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+  WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder);
 
   wgpuQueueSubmit(app->queue, 1, &command);
   wgpuCommandBufferRelease(command);
 
-
   // gui
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
-  bool show_demo_window = true;
-  ImGui::ShowDemoWindow(&show_demo_window);
+  if (app->open) {
+    bool show_demo_window = true;
+    ImGui::ShowDemoWindow(&show_demo_window);
+  }
   ImGui::Render();
 
-  WGPUCommandEncoderDescriptor enc_desc = {};
-  WGPUCommandEncoder encoder1 = wgpuDeviceCreateCommandEncoder(app->device, &enc_desc);
+  WGPUCommandEncoder encoder1 = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
 
-  WGPURenderPassColorAttachment color_attachments = {
-    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-    .loadOp = WGPULoadOp_Load,
-    .storeOp = WGPUStoreOp_Store,
-    .view = targetView,
-  };
   WGPURenderPassDescriptor render_pass_desc = {
     .colorAttachmentCount = 1,
-    .colorAttachments = &color_attachments,
+    .colorAttachments = new WGPURenderPassColorAttachment{
+      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+      .loadOp = WGPULoadOp_Load,
+      .storeOp = WGPUStoreOp_Store,
+      .view = targetView,
+      },
   };
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder1, &render_pass_desc);
   ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
   wgpuRenderPassEncoderEnd(pass);
   wgpuRenderPassEncoderRelease(pass);
-  WGPUCommandBufferDescriptor cmd_buffer_desc = {};
-  WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder1, &cmd_buffer_desc);
+  WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder1, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder1);
 
   wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
@@ -300,8 +282,12 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-  if (event->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;
+  auto* app = (AppState*)appstate;
 
+  if (event->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;
+  if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+    app->open = !app->open;
+  }
   return SDL_APP_CONTINUE;
 }
 
