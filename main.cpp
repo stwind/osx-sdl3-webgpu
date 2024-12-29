@@ -7,6 +7,9 @@
 #include <webgpu.h>
 #include <wgpu.h>
 #include "sdl3webgpu.h"
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_wgpu.h"
 
 const char* shaderSource = R"(
 @vertex
@@ -108,6 +111,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
+  // WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8Unorm;
   WGPUSurfaceConfiguration surfaceConfiguration;
   surfaceConfiguration.nextInChain = nullptr;
   surfaceConfiguration.device = device;
@@ -179,9 +183,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   wgpuShaderModuleRelease(shaderModule);
 
-  SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
-  if (not renderer) return SDL_Fail();
-
   SDL_ShowWindow(window);
   {
     int width, height, bbwidth, bbheight;
@@ -196,6 +197,18 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   *appstate = new AppState{ window, device, surface, queue, pipeline };
   SDL_Log("Application started successfully!");
+
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGui::StyleColorsDark();
+  ImGui_ImplSDL3_InitForOther(window);
+
+  ImGui_ImplWGPU_InitInfo init_info;
+  init_info.Device = device;
+  init_info.NumFramesInFlight = 3;
+  init_info.RenderTargetFormat = surfaceFormat;
+  init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
+  if (!ImGui_ImplWGPU_Init(&init_info)) return SDL_Fail();
 
   return SDL_APP_CONTINUE;
 }
@@ -219,44 +232,71 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   viewDescriptor.aspect = WGPUTextureAspect_All;
   WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
 
-  WGPUCommandEncoderDescriptor encoderDesc = {};
-  encoderDesc.nextInChain = nullptr;
-  encoderDesc.label = "My command encoder";
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
+  // WGPUCommandEncoderDescriptor encoderDesc = {};
+  // encoderDesc.label = "My command encoder";
+  // WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
 
-  WGPURenderPassDescriptor renderPassDesc = {};
-  renderPassDesc.nextInChain = nullptr;
+  // WGPURenderPassDescriptor renderPassDesc = {};
 
-  WGPURenderPassColorAttachment renderPassColorAttachment = {};
-  renderPassColorAttachment.view = targetView;
-  renderPassColorAttachment.resolveTarget = nullptr;
-  renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
-  renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
-  renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
+  // WGPURenderPassColorAttachment renderPassColorAttachment = {};
+  // renderPassColorAttachment.view = targetView;
+  // renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
+  // renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
+  // renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
 
-  renderPassDesc.colorAttachmentCount = 1;
-  renderPassDesc.colorAttachments = &renderPassColorAttachment;
-  renderPassDesc.depthStencilAttachment = nullptr;
-  renderPassDesc.timestampWrites = nullptr;
+  // renderPassDesc.colorAttachmentCount = 1;
+  // renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-  WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
-  wgpuRenderPassEncoderSetPipeline(renderPass, app->pipeline);
-  wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
-  wgpuRenderPassEncoderEnd(renderPass);
-  wgpuRenderPassEncoderRelease(renderPass);
+  // WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+  // wgpuRenderPassEncoderSetPipeline(renderPass, app->pipeline);
+  // wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
+  // wgpuRenderPassEncoderEnd(renderPass);
+  // wgpuRenderPassEncoderRelease(renderPass);
 
-  WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-  cmdBufferDescriptor.nextInChain = nullptr;
-  cmdBufferDescriptor.label = "Command buffer";
-  WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+  // WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+  // cmdBufferDescriptor.label = "Command buffer";
+  // WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+  // wgpuCommandEncoderRelease(encoder);
+
+  // wgpuQueueSubmit(app->queue, 1, &command);
+  // wgpuCommandBufferRelease(command);
+
+  ImGui_ImplWGPU_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  ImGui::NewFrame();
+  bool show_demo_window = true;
+  ImGui::ShowDemoWindow(&show_demo_window);
+  ImGui::Render();
+
+  WGPURenderPassColorAttachment color_attachments = {};
+  color_attachments.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+  color_attachments.loadOp = WGPULoadOp_Clear;
+  color_attachments.storeOp = WGPUStoreOp_Store;
+  color_attachments.clearValue = WGPUColor{ 0.5, 0.0, 0.2, 1.0 };
+  color_attachments.view = targetView;
+
+  WGPURenderPassDescriptor render_pass_desc = {};
+  render_pass_desc.colorAttachmentCount = 1;
+  render_pass_desc.colorAttachments = &color_attachments;
+  render_pass_desc.depthStencilAttachment = nullptr;
+
+  WGPUCommandEncoderDescriptor enc_desc = {};
+  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &enc_desc);
+
+  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
+  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
+  wgpuRenderPassEncoderEnd(pass);
+  wgpuRenderPassEncoderRelease(pass);
+
+  WGPUCommandBufferDescriptor cmd_buffer_desc = {};
+  WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder, &cmd_buffer_desc);
   wgpuCommandEncoderRelease(encoder);
 
-  wgpuQueueSubmit(app->queue, 1, &command);
-  wgpuCommandBufferRelease(command);
+  wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
+  wgpuCommandBufferRelease(cmd_buffer);
+
   wgpuTextureViewRelease(targetView);
-
   wgpuSurfacePresent(app->surface);
-
   wgpuTextureRelease(surfaceTexture.texture);
 
   return SDL_APP_CONTINUE;

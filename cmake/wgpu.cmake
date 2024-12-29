@@ -8,6 +8,7 @@ set_target_properties(wgpu PROPERTIES
     IMPORTED_LOCATION ${wgpu_SOURCE_DIR}/lib/libwgpu_native.dylib
 )
 target_include_directories(wgpu INTERFACE
+    ${wgpu_SOURCE_DIR}/include/
     ${wgpu_SOURCE_DIR}/include/webgpu
     ${wgpu_SOURCE_DIR}/include/wgpu
 )

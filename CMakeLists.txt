@@ -24,9 +24,38 @@ FetchContent_DeclareShallowGit(
 )
 FetchContent_MakeAvailable(SDL3)
 
+FetchContent_DeclareShallowGit(
+    imgui
+    GIT_REPOSITORY "https://github.com/ocornut/imgui.git"
+    GIT_TAG "v1.91.6"
+)
+FetchContent_MakeAvailable(imgui)
+
 include(wgpu)
 
-add_executable(${TARGET} sdl3webgpu.h sdl3webgpu.mm main.cpp)
+set(IMGUI_SOURCES
+${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+${imgui_SOURCE_DIR}/imgui.cpp
+${imgui_SOURCE_DIR}/imgui_draw.cpp
+${imgui_SOURCE_DIR}/imgui_demo.cpp
+${imgui_SOURCE_DIR}/imgui_tables.cpp
+${imgui_SOURCE_DIR}/imgui_widgets.cpp
+)
+
+add_executable(${TARGET} 
+sdl3webgpu.h sdl3webgpu.mm main.cpp
+${IMGUI_SOURCES}
+)
+
+target_include_directories(${TARGET} PUBLIC
+  ${imgui_SOURCE_DIR}
+  ${imgui_SOURCE_DIR}/backends
+)
+
+target_compile_definitions(${TARGET} PUBLIC
+"IMGUI_IMPL_WEBGPU_BACKEND_WGPU"
+)
 
 target_link_libraries(${TARGET} 
 PRIVATE SDL3::SDL3 wgpu
