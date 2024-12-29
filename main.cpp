@@ -105,6 +105,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   WGPUDevice device;
   wgpuAdapterRequestDevice(adapter, &deviceDescriptor, requestDeviceCallback, &device);
   SDL_Log("Device: %p", device);
+  wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
   WGPUSurfaceConfiguration surfaceConfiguration;
@@ -125,8 +126,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   wgpuSurfaceConfigure(surface, &surfaceConfiguration);
   WGPUQueue queue = wgpuDeviceGetQueue(device);
-
-  wgpuAdapterRelease(adapter);
 
   WGPUShaderModuleDescriptor shaderDesc;
   WGPUShaderModuleWGSLDescriptor shaderCodeDesc;
