@@ -70,6 +70,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     };
   wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, requestAdapterCallback, &adapter);
   SDL_Log("Adapter: %p", adapter);
+  wgpuInstanceRelease(instance);
 
   WGPUSupportedLimits supportedLimits;
   supportedLimits.nextInChain = nullptr;
@@ -177,6 +178,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   pipelineDesc.layout = nullptr;
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
 
+  wgpuShaderModuleRelease(shaderModule);
+
   SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
   if (not renderer) return SDL_Fail();
 
@@ -268,6 +271,11 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
   auto* app = (AppState*)appstate;
+  wgpuRenderPipelineRelease(app->pipeline);
+  wgpuQueueRelease(app->queue);
+  wgpuDeviceRelease(app->device);
+  wgpuSurfaceUnconfigure(app->surface);
+  wgpuSurfaceRelease(app->surface);
   SDL_DestroyWindow(app->window);
   delete app;
 
