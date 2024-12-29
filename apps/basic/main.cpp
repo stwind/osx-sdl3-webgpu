@@ -127,7 +127,6 @@ WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
   return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
     .nextInChain = &shaderCodeDesc.chain
     });
-
 };
 
 struct AppState {
@@ -166,14 +165,18 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   WGPUShaderModule shaderModule = createShaderModule(device, shaderSource);
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
-    .vertex.bufferCount = 0,
-    .vertex.module = shaderModule,
-    .vertex.entryPoint = "vs_main",
-    .vertex.constantCount = 0,
-    .primitive.topology = WGPUPrimitiveTopology_TriangleList,
-    .primitive.stripIndexFormat = WGPUIndexFormat_Undefined,
-    .primitive.frontFace = WGPUFrontFace_CCW,
-    .primitive.cullMode = WGPUCullMode_None,
+    .vertex = {
+      .bufferCount = 0,
+      .module = shaderModule,
+      .entryPoint = "vs_main",
+      .constantCount = 0,
+    },
+    .primitive = {
+      .topology = WGPUPrimitiveTopology_TriangleList,
+      .stripIndexFormat = WGPUIndexFormat_Undefined,
+      .frontFace = WGPUFrontFace_CCW,
+      .cullMode = WGPUCullMode_None,
+    },
     .fragment = new WGPUFragmentState{
       .module = shaderModule,
       .entryPoint = "fs_main",
