@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12.0)
-project(sdl3hello LANGUAGES C CXX OBJC)
+project(basic LANGUAGES C CXX OBJC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,24 +23,8 @@ FetchContent_DeclareShallowGit(
 )
 FetchContent_MakeAvailable(SDL3)
 
-FetchContent_DeclareShallowGit(
-    imgui
-    GIT_REPOSITORY "https://github.com/ocornut/imgui.git"
-    GIT_TAG "v1.91.6"
-)
-FetchContent_MakeAvailable(imgui)
-
 include(wgpu)
-
-set(IMGUI_SOURCES
-${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
-${imgui_SOURCE_DIR}/imgui.cpp
-${imgui_SOURCE_DIR}/imgui_draw.cpp
-${imgui_SOURCE_DIR}/imgui_demo.cpp
-${imgui_SOURCE_DIR}/imgui_tables.cpp
-${imgui_SOURCE_DIR}/imgui_widgets.cpp
-)
+include(imgui)
 
 file(GLOB_RECURSE LIB_SOURCES "${ROOT}/lib/*")
 
@@ -51,8 +35,7 @@ main.cpp
 )
 
 target_include_directories(${TARGET} PUBLIC
-${imgui_SOURCE_DIR}
-${imgui_SOURCE_DIR}/backends
+${IMGUI_INCLUDES}
 ${ROOT}/include()
 )
 
