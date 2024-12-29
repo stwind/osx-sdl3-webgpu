@@ -32,7 +32,7 @@ fn fs_main() -> @location(0) vec4f {
 }
 )";
 
-bool initIMGUI(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
+bool ImGui_init(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -48,6 +48,26 @@ bool initIMGUI(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surfaceF
   init_info.RenderTargetFormat = surfaceFormat;
   init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
   return ImGui_ImplWGPU_Init(&init_info);
+}
+
+void ImGui_render(WGPUDevice device, WGPUTextureView view, WGPUQueue queue) {
+  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, new WGPUCommandEncoderDescriptor{});
+  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
+    .colorAttachmentCount = 1,
+    .colorAttachments = new WGPURenderPassColorAttachment{
+      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+      .loadOp = WGPULoadOp_Load,
+      .storeOp = WGPUStoreOp_Store,
+      .view = view,
+      },
+    });
+  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
+  wgpuRenderPassEncoderEnd(pass);
+  wgpuRenderPassEncoderRelease(pass);
+  WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
+  wgpuCommandEncoderRelease(encoder);
+  wgpuQueueSubmit(queue, 1, &command);
+  wgpuCommandBufferRelease(command);
 }
 
 struct AppState {
@@ -91,16 +111,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     .limits = supportedLimits.limits
   };
   requiredLimits.limits.maxBufferSize = 1024 * 1024 * 1024;
-  WGPUFeatureName requiredFeatures[3]{
-      WGPUFeatureName_Float32Filterable,
-      WGPUFeatureName_TimestampQuery,
-      (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
-  };
 
   WGPUDevice device;
   wgpuAdapterRequestDevice(adapter, new WGPUDeviceDescriptor{
     .requiredFeatureCount = 3,
-    .requiredFeatures = requiredFeatures,
+    .requiredFeatures = new WGPUFeatureName[3]{
+      WGPUFeatureName_Float32Filterable,
+      WGPUFeatureName_TimestampQuery,
+      (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
+    },
     .requiredLimits = &requiredLimits,
     }, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
       if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
@@ -173,7 +192,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuShaderModuleRelease(shaderModule);
 
   *appstate = new AppState{ window, device, surface, queue, pipeline };
-  if (not initIMGUI(window, device, surfaceFormat)) return SDL_Fail();
+  if (not ImGui_init(window, device, surfaceFormat)) return SDL_Fail();
 
   SDL_ShowWindow(window);
   {
@@ -198,7 +217,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   wgpuSurfaceGetCurrentTexture(app->surface, &surfaceTexture);
   if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) return SDL_Fail();
 
-  WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
+  WGPUTextureView view = wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
     .format = wgpuTextureGetFormat(surfaceTexture.texture),
     .dimension = WGPUTextureViewDimension_2D,
     .baseMipLevel = 0,
@@ -210,20 +229,20 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
   // image
   WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
-  WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
+  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
     .colorAttachments = new WGPURenderPassColorAttachment{
       .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-      .view = targetView,
+      .view = view,
       .loadOp = WGPULoadOp_Clear,
       .storeOp = WGPUStoreOp_Store,
       .clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 },
     }
     });
-  wgpuRenderPassEncoderSetPipeline(renderPass, app->pipeline);
-  wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
-  wgpuRenderPassEncoderEnd(renderPass);
-  wgpuRenderPassEncoderRelease(renderPass);
+  wgpuRenderPassEncoderSetPipeline(pass, app->pipeline);
+  wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
+  wgpuRenderPassEncoderEnd(pass);
+  wgpuRenderPassEncoderRelease(pass);
   WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder);
   wgpuQueueSubmit(app->queue, 1, &command);
@@ -235,25 +254,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   ImGui::NewFrame();
   ImGui::ShowDemoWindow();
   ImGui::Render();
-  WGPUCommandEncoder encoder1 = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
-  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder1, new WGPURenderPassDescriptor{
-    .colorAttachmentCount = 1,
-    .colorAttachments = new WGPURenderPassColorAttachment{
-      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-      .loadOp = WGPULoadOp_Load,
-      .storeOp = WGPUStoreOp_Store,
-      .view = targetView,
-      },
-    });
-  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
-  wgpuRenderPassEncoderEnd(pass);
-  wgpuRenderPassEncoderRelease(pass);
-  WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder1, new WGPUCommandBufferDescriptor{});
-  wgpuCommandEncoderRelease(encoder1);
-  wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
-  wgpuCommandBufferRelease(cmd_buffer);
 
-  wgpuTextureViewRelease(targetView);
+  ImGui_render(app->device, view, app->queue);
+
+  wgpuTextureViewRelease(view);
   wgpuSurfacePresent(app->surface);
   wgpuTextureRelease(surfaceTexture.texture);
 
