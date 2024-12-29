@@ -48,7 +48,7 @@ bool ImGui_init(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surface
   init_info.RenderTargetFormat = surfaceFormat;
   init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
   return ImGui_ImplWGPU_Init(&init_info);
-}
+};
 
 void ImGui_render(WGPUDevice device, WGPUTextureView view, WGPUQueue queue) {
   WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, new WGPUCommandEncoderDescriptor{});
@@ -68,7 +68,51 @@ void ImGui_render(WGPUDevice device, WGPUTextureView view, WGPUQueue queue) {
   wgpuCommandEncoderRelease(encoder);
   wgpuQueueSubmit(queue, 1, &command);
   wgpuCommandBufferRelease(command);
+};
+
+void requestAdapter(WGPUSurface surface, WGPUInstance instance, WGPUAdapter* adapter) {
+  wgpuInstanceRequestAdapter(instance, new WGPURequestAdapterOptions{
+  .compatibleSurface = surface,
+  .powerPreference = WGPUPowerPreference_HighPerformance,
+  .forceFallbackAdapter = false,
+  .backendType = WGPUBackendType_Undefined,
+    }, [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
+      if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter*)(userdata) = adapter;
+      else throw std::runtime_error(message);
+    }, adapter);
+};
+
+void requestDevice(WGPUAdapter adapter, WGPUDevice* device) {
+  WGPUSupportedLimits supportedLimits;
+  wgpuAdapterGetLimits(adapter, &supportedLimits);
+  wgpuAdapterRequestDevice(adapter, new WGPUDeviceDescriptor{
+    .requiredFeatureCount = 3,
+    .requiredFeatures = new WGPUFeatureName[3]{
+      WGPUFeatureName_Float32Filterable,
+      WGPUFeatureName_TimestampQuery,
+      (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
+    },
+    .requiredLimits = new WGPURequiredLimits{
+      .limits = supportedLimits.limits
+    },
+    }, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
+      if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
+      else throw std::runtime_error(message);
+    }, device);
 }
+
+WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
+  WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
+    .code = shaderSource,
+    .chain = {
+      .sType = WGPUSType_ShaderModuleWGSLDescriptor
+    }
+  };
+  return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
+    .nextInChain = &shaderCodeDesc.chain
+    });
+
+};
 
 struct AppState {
   SDL_Window* window;
@@ -93,38 +137,12 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
   WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
 
-  WGPUAdapter adapter = nullptr;
-  wgpuInstanceRequestAdapter(instance, new WGPURequestAdapterOptions{
-    .compatibleSurface = surface,
-    .powerPreference = WGPUPowerPreference_HighPerformance,
-    .forceFallbackAdapter = false,
-    .backendType = WGPUBackendType_Undefined,
-    }, [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
-      if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter*)(userdata) = adapter;
-      else throw std::runtime_error(message);
-    }, &adapter);
+  WGPUAdapter adapter;
+  requestAdapter(surface, instance, &adapter);
   wgpuInstanceRelease(instance);
 
-  WGPUSupportedLimits supportedLimits;
-  wgpuAdapterGetLimits(adapter, &supportedLimits);
-  WGPURequiredLimits requiredLimits = {
-    .limits = supportedLimits.limits
-  };
-  requiredLimits.limits.maxBufferSize = 1024 * 1024 * 1024;
-
   WGPUDevice device;
-  wgpuAdapterRequestDevice(adapter, new WGPUDeviceDescriptor{
-    .requiredFeatureCount = 3,
-    .requiredFeatures = new WGPUFeatureName[3]{
-      WGPUFeatureName_Float32Filterable,
-      WGPUFeatureName_TimestampQuery,
-      (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
-    },
-    .requiredLimits = &requiredLimits,
-    }, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
-      if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
-      else throw std::runtime_error(message);
-    }, &device);
+  requestDevice(adapter, &device);
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
@@ -141,17 +159,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     .width = (uint32_t)bbwidth,
     .height = (uint32_t)bbheight,
     });
-  WGPUQueue queue = wgpuDeviceGetQueue(device);
 
-  WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
-    .code = shaderSource,
-    .chain = {
-      .sType = WGPUSType_ShaderModuleWGSLDescriptor
-    }
-  };
-  WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
-    .nextInChain = &shaderCodeDesc.chain
-    });
+  WGPUShaderModule shaderModule = createShaderModule(device, shaderSource);
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
     .vertex.bufferCount = 0,
     .vertex.module = shaderModule,
@@ -191,7 +200,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     });
   wgpuShaderModuleRelease(shaderModule);
 
-  *appstate = new AppState{ window, device, surface, queue, pipeline };
+  *appstate = new AppState{
+    .window = window,
+    .device = device,
+    .surface = surface,
+    .queue = wgpuDeviceGetQueue(device),
+    .pipeline = pipeline,
+  };
   if (not ImGui_init(window, device, surfaceFormat)) return SDL_Fail();
 
   SDL_ShowWindow(window);
@@ -208,7 +223,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   SDL_Log("Started");
   return SDL_APP_CONTINUE;
-}
+};
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
   auto* app = (AppState*)appstate;
