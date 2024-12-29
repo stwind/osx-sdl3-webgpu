@@ -5,10 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(TARGET ${PROJECT_NAME})
+set(ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
 
-list(PREPEND CMAKE_MODULE_PATH
-    ${CMAKE_CURRENT_LIST_DIR}/cmake/
-)
+list(PREPEND CMAKE_MODULE_PATH ${ROOT}/cmake/)
 
 if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
     cmake_policy(SET CMP0135 NEW)
@@ -43,16 +42,18 @@ ${imgui_SOURCE_DIR}/imgui_tables.cpp
 ${imgui_SOURCE_DIR}/imgui_widgets.cpp
 )
 
-file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*")
+file(GLOB_RECURSE LIB_SOURCES "${ROOT}/lib/*")
 
 add_executable(${TARGET} 
-${SOURCES}
 ${IMGUI_SOURCES}
+${LIB_SOURCES}
+main.cpp
 )
 
 target_include_directories(${TARGET} PUBLIC
 ${imgui_SOURCE_DIR}
 ${imgui_SOURCE_DIR}/backends
+${ROOT}/include()
 )
 
 target_compile_definitions(${TARGET} PUBLIC
