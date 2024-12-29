@@ -101,6 +101,22 @@ void requestDevice(WGPUAdapter adapter, WGPUDevice* device) {
     }, device);
 }
 
+void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
+  int bbwidth, bbheight;
+  SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
+  wgpuSurfaceConfigure(surface, new WGPUSurfaceConfiguration{
+  .device = device,
+  .format = surfaceFormat,
+  .usage = WGPUTextureUsage_RenderAttachment,
+  .viewFormatCount = 1,
+  .viewFormats = &surfaceFormat,
+  .alphaMode = WGPUCompositeAlphaMode_Auto,
+  .presentMode = WGPUPresentMode_Fifo,
+  .width = (uint32_t)bbwidth,
+  .height = (uint32_t)bbheight,
+    });
+}
+
 WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
   WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
     .code = shaderSource,
@@ -131,7 +147,7 @@ SDL_AppResult SDL_Fail() {
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   if (not SDL_Init(SDL_INIT_VIDEO)) return SDL_Fail();
 
-  SDL_Window* window = SDL_CreateWindow("Window", 1280, 720, SDL_WINDOW_RESIZABLE);
+  SDL_Window* window = SDL_CreateWindow("Window", 1280, 720, SDL_WINDOW_HIGH_PIXEL_DENSITY);
   if (not window) return SDL_Fail();
 
   WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
@@ -146,19 +162,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
-  int bbwidth, bbheight;
-  SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-  wgpuSurfaceConfigure(surface, new WGPUSurfaceConfiguration{
-    .device = device,
-    .format = surfaceFormat,
-    .usage = WGPUTextureUsage_RenderAttachment,
-    .viewFormatCount = 1,
-    .viewFormats = &surfaceFormat,
-    .alphaMode = WGPUCompositeAlphaMode_Auto,
-    .presentMode = WGPUPresentMode_Fifo,
-    .width = (uint32_t)bbwidth,
-    .height = (uint32_t)bbheight,
-    });
+  configureSurface(window, surface, device, surfaceFormat);
 
   WGPUShaderModule shaderModule = createShaderModule(device, shaderSource);
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
