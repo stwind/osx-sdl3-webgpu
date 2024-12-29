@@ -39,8 +39,6 @@ struct AppState {
   WGPUSurface surface;
   WGPUQueue queue;
   WGPURenderPipeline pipeline;
-
-  bool open;
 };
 
 SDL_AppResult SDL_Fail() {
@@ -65,10 +63,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     .forceFallbackAdapter = false,
     .backendType = WGPUBackendType_Undefined,
     }, [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
-      if (status == WGPURequestAdapterStatus_Success)
-        *(WGPUAdapter*)(userdata) = adapter;
-      else
-        throw std::runtime_error(message);
+      if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter*)(userdata) = adapter;
+      else throw std::runtime_error(message);
     }, &adapter);
   SDL_Log("Adapter: %p", adapter);
   wgpuInstanceRelease(instance);
@@ -91,10 +87,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     .requiredFeatures = requiredFeatures,
     .requiredLimits = &requiredLimits,
     }, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
-      if (status == WGPURequestDeviceStatus_Success)
-        *(WGPUDevice*)(userdata) = device;
-      else
-        throw std::runtime_error(message);
+      if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
+      else throw std::runtime_error(message);
     }, &device);
   SDL_Log("Device: %p", device);
   wgpuAdapterRelease(adapter);
@@ -124,24 +118,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
     .nextInChain = &shaderCodeDesc.chain
     });
-
-  WGPUColorTargetState colorTarget = {
-    .format = surfaceFormat,
-    .blend = new WGPUBlendState{
-      .color = {
-        .srcFactor = WGPUBlendFactor_SrcAlpha,
-        .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-        .operation = WGPUBlendOperation_Add
-      },
-      .alpha = {
-        .srcFactor = WGPUBlendFactor_Zero,
-        .dstFactor = WGPUBlendFactor_One,
-        .operation = WGPUBlendOperation_Add
-      }
-    },
-    .writeMask = WGPUColorWriteMask_All
-  };
-
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
     .vertex.bufferCount = 0,
     .vertex.module = shaderModule,
@@ -156,7 +132,22 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       .entryPoint = "fs_main",
       .constantCount = 0,
       .targetCount = 1,
-      .targets = &colorTarget
+      .targets = new WGPUColorTargetState{
+        .format = surfaceFormat,
+        .blend = new WGPUBlendState{
+          .color = {
+            .srcFactor = WGPUBlendFactor_SrcAlpha,
+            .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+            .operation = WGPUBlendOperation_Add
+          },
+          .alpha = {
+            .srcFactor = WGPUBlendFactor_Zero,
+            .dstFactor = WGPUBlendFactor_One,
+            .operation = WGPUBlendOperation_Add
+          }
+        },
+        .writeMask = WGPUColorWriteMask_All
+      }
     },
     .multisample = {
       .count = 1,
@@ -164,22 +155,9 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       .alphaToCoverageEnabled = false
     }
     });
-
   wgpuShaderModuleRelease(shaderModule);
 
-  SDL_ShowWindow(window);
-  {
-    int width, height, bbwidth, bbheight;
-    SDL_GetWindowSize(window, &width, &height);
-    SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-    SDL_Log("Window size: %ix%i", width, height);
-    SDL_Log("Backbuffer size: %ix%i", bbwidth, bbheight);
-    if (width != bbwidth) {
-      SDL_Log("This is a highdpi environment.");
-    }
-  }
-
-  *appstate = new AppState{ window, device, surface, queue, pipeline, false };
+  *appstate = new AppState{ window, device, surface, queue, pipeline };
   SDL_Log("Application started successfully!");
 
   IMGUI_CHECKVERSION();
@@ -193,6 +171,18 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   init_info.RenderTargetFormat = surfaceFormat;
   init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
   if (!ImGui_ImplWGPU_Init(&init_info)) return SDL_Fail();
+
+  SDL_ShowWindow(window);
+  {
+    int width, height, bbwidth, bbheight;
+    SDL_GetWindowSize(window, &width, &height);
+    SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
+    SDL_Log("Window size: %ix%i", width, height);
+    SDL_Log("Backbuffer size: %ix%i", bbwidth, bbheight);
+    if (width != bbwidth) {
+      SDL_Log("This is a highdpi environment.");
+    }
+  }
 
   return SDL_APP_CONTINUE;
 }
@@ -241,10 +231,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
-  if (app->open) {
-    bool show_demo_window = true;
-    ImGui::ShowDemoWindow(&show_demo_window);
-  }
+  ImGui::ShowDemoWindow();
   ImGui::Render();
 
   WGPUCommandEncoder encoder1 = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
@@ -279,9 +266,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
   auto* app = (AppState*)appstate;
 
   if (event->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;
-  if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-    app->open = !app->open;
-  }
+
+  ImGui_ImplSDL3_ProcessEvent(event);
+
   return SDL_APP_CONTINUE;
 }
 
@@ -294,6 +281,9 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
   wgpuSurfaceRelease(app->surface);
   SDL_DestroyWindow(app->window);
   delete app;
+
+  ImGui_ImplSDL3_Shutdown();
+  ImGui::DestroyContext();
 
   SDL_Log("Application quit successfully!");
 }
