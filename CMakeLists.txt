@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.12.0)
-project(sdl3hello)
+project(sdl3hello LANGUAGES C CXX OBJC)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(TARGET sdl3hello)
 
@@ -23,10 +26,8 @@ FetchContent_MakeAvailable(SDL3)
 
 include(wgpu)
 
-add_executable(${TARGET})
-target_sources(${TARGET} PRIVATE sdl3webgpu.h sdl3webgpu.c main.cpp)
+add_executable(${TARGET} sdl3webgpu.h sdl3webgpu.c main.cpp)
 set_source_files_properties("sdl3webgpu.c" PROPERTIES COMPILE_FLAGS "-x objective-c")
-target_compile_features(${TARGET} PRIVATE cxx_std_20)
 
 target_link_libraries(${TARGET} 
 PRIVATE SDL3::SDL3 wgpu

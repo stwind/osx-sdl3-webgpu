@@ -114,8 +114,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   surfaceConfiguration.viewFormatCount = 1;
   surfaceConfiguration.viewFormats = &surfaceFormat;
   surfaceConfiguration.alphaMode = WGPUCompositeAlphaMode_Auto;
-  surfaceConfiguration.width = 352;
-  surfaceConfiguration.height = 430;
+
+  int bbwidth, bbheight;
+  SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
+  surfaceConfiguration.width = bbwidth;
+  surfaceConfiguration.height = bbheight;
   surfaceConfiguration.presentMode = WGPUPresentMode_Fifo;
   // surfaceConfiguration.presentMode = WGPUPresentMode_Immediate;
 
