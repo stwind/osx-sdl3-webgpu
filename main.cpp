@@ -58,12 +58,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
   SDL_Log("surface = %p", (void*)surface);
 
-  WGPURequestAdapterOptions requestAdapterOptions;
-  requestAdapterOptions.nextInChain = nullptr;
-  requestAdapterOptions.compatibleSurface = surface;
-  requestAdapterOptions.powerPreference = WGPUPowerPreference_HighPerformance;
-  requestAdapterOptions.forceFallbackAdapter = false;
-  requestAdapterOptions.backendType = WGPUBackendType_Undefined;
+  WGPURequestAdapterOptions requestAdapterOptions = {
+    .compatibleSurface = surface,
+    .powerPreference = WGPUPowerPreference_HighPerformance,
+    .forceFallbackAdapter = false,
+    .backendType = WGPUBackendType_Undefined,
+  };
+
   WGPUAdapter adapter = nullptr;
   auto requestAdapterCallback = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
     if (status == WGPURequestAdapterStatus_Success)
@@ -76,11 +77,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuInstanceRelease(instance);
 
   WGPUSupportedLimits supportedLimits;
-  supportedLimits.nextInChain = nullptr;
   wgpuAdapterGetLimits(adapter, &supportedLimits);
-  WGPURequiredLimits requiredLimits;
-  requiredLimits.nextInChain = nullptr;
-  requiredLimits.limits = supportedLimits.limits;
+  WGPURequiredLimits requiredLimits = {
+    .limits = supportedLimits.limits
+  };
   requiredLimits.limits.maxBufferSize = 1024 * 1024 * 1024;
   WGPUFeatureName requiredFeatures[3]{
       WGPUFeatureName_Float32Filterable,
@@ -88,16 +88,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
   };
 
-  WGPUDeviceDescriptor deviceDescriptor;
-  deviceDescriptor.nextInChain = nullptr;
-  deviceDescriptor.label = nullptr;
-  deviceDescriptor.requiredFeatureCount = 3;
-  deviceDescriptor.requiredFeatures = requiredFeatures;
-  deviceDescriptor.requiredLimits = &requiredLimits;
-  deviceDescriptor.defaultQueue.nextInChain = nullptr;
-  deviceDescriptor.defaultQueue.label = nullptr;
-  deviceDescriptor.deviceLostCallback = nullptr;
-  deviceDescriptor.deviceLostUserdata = nullptr;
+  WGPUDeviceDescriptor deviceDescriptor = {
+    .requiredFeatureCount = 3,
+    .requiredFeatures = requiredFeatures,
+    .requiredLimits = &requiredLimits,
+  };
   auto requestDeviceCallback = [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
     if (status == WGPURequestDeviceStatus_Success)
       *(WGPUDevice*)(userdata) = device;
@@ -111,73 +106,79 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
-  WGPUSurfaceConfiguration surfaceConfiguration;
-  surfaceConfiguration.nextInChain = nullptr;
-  surfaceConfiguration.device = device;
-  surfaceConfiguration.format = surfaceFormat;
-  surfaceConfiguration.usage = WGPUTextureUsage_RenderAttachment;
-  surfaceConfiguration.viewFormatCount = 1;
-  surfaceConfiguration.viewFormats = &surfaceFormat;
-  surfaceConfiguration.alphaMode = WGPUCompositeAlphaMode_Auto;
+  WGPUSurfaceConfiguration surfaceConfiguration = {
+    .device = device,
+    .format = surfaceFormat,
+    .usage = WGPUTextureUsage_RenderAttachment,
+    .viewFormatCount = 1,
+    .viewFormats = &surfaceFormat,
+    .alphaMode = WGPUCompositeAlphaMode_Auto,
+    .presentMode = WGPUPresentMode_Fifo
+  };
 
   int bbwidth, bbheight;
   SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
   surfaceConfiguration.width = bbwidth;
   surfaceConfiguration.height = bbheight;
-  surfaceConfiguration.presentMode = WGPUPresentMode_Fifo;
-  // surfaceConfiguration.presentMode = WGPUPresentMode_Immediate;
 
   wgpuSurfaceConfigure(surface, &surfaceConfiguration);
   WGPUQueue queue = wgpuDeviceGetQueue(device);
 
-  WGPUShaderModuleDescriptor shaderDesc;
-  WGPUShaderModuleWGSLDescriptor shaderCodeDesc;
-  shaderCodeDesc.chain.next = nullptr;
-  shaderCodeDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
-  shaderDesc.nextInChain = &shaderCodeDesc.chain;
-  shaderCodeDesc.code = shaderSource;
+  WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
+    .code = shaderSource,
+    .chain = {
+      .sType = WGPUSType_ShaderModuleWGSLDescriptor
+    }
+  };
+  WGPUShaderModuleDescriptor shaderDesc = {
+    .nextInChain = &shaderCodeDesc.chain
+  };
   WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderDesc);
 
-  WGPURenderPipelineDescriptor pipelineDesc;
-  pipelineDesc.nextInChain = nullptr;
-  pipelineDesc.vertex.bufferCount = 0;
-  pipelineDesc.vertex.buffers = nullptr;
-  pipelineDesc.vertex.module = shaderModule;
-  pipelineDesc.vertex.entryPoint = "vs_main";
-  pipelineDesc.vertex.constantCount = 0;
-  pipelineDesc.vertex.constants = nullptr;
-  pipelineDesc.primitive.topology = WGPUPrimitiveTopology_TriangleList;
-  pipelineDesc.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
-  pipelineDesc.primitive.frontFace = WGPUFrontFace_CCW;
-  pipelineDesc.primitive.cullMode = WGPUCullMode_None;
+  WGPUBlendState blendState = {
+  .color = {
+    .srcFactor = WGPUBlendFactor_SrcAlpha,
+    .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+    .operation = WGPUBlendOperation_Add
+  },
+  .alpha = {
+    .srcFactor = WGPUBlendFactor_Zero,
+    .dstFactor = WGPUBlendFactor_One,
+    .operation = WGPUBlendOperation_Add
+  }
+  };
 
-  WGPUFragmentState fragmentState;
-  fragmentState.module = shaderModule;
-  fragmentState.entryPoint = "fs_main";
-  fragmentState.constantCount = 0;
-  fragmentState.constants = nullptr;
+  WGPUColorTargetState colorTarget = {
+    .format = surfaceFormat,
+    .blend = &blendState,
+    .writeMask = WGPUColorWriteMask_All
+  };
 
-  WGPUBlendState blendState;
-  blendState.color.srcFactor = WGPUBlendFactor_SrcAlpha;
-  blendState.color.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
-  blendState.color.operation = WGPUBlendOperation_Add;
-  blendState.alpha.srcFactor = WGPUBlendFactor_Zero;
-  blendState.alpha.dstFactor = WGPUBlendFactor_One;
-  blendState.alpha.operation = WGPUBlendOperation_Add;
+  WGPUFragmentState fragmentState = {
+    .module = shaderModule,
+    .entryPoint = "fs_main",
+    .constantCount = 0,
+    .targetCount = 1,
+    .targets = &colorTarget
+  };
 
-  WGPUColorTargetState colorTarget;
-  colorTarget.format = surfaceFormat;
-  colorTarget.blend = &blendState;
-  colorTarget.writeMask = WGPUColorWriteMask_All;
+  WGPURenderPipelineDescriptor pipelineDesc = {
+    .vertex.bufferCount = 0,
+    .vertex.module = shaderModule,
+    .vertex.entryPoint = "vs_main",
+    .vertex.constantCount = 0,
+    .primitive.topology = WGPUPrimitiveTopology_TriangleList,
+    .primitive.stripIndexFormat = WGPUIndexFormat_Undefined,
+    .primitive.frontFace = WGPUFrontFace_CCW,
+    .primitive.cullMode = WGPUCullMode_None,
+    .fragment = &fragmentState,
+    .multisample = {
+      .count = 1,
+      .mask = ~0u,
+      .alphaToCoverageEnabled = false
+    }
+  };
 
-  fragmentState.targetCount = 1;
-  fragmentState.targets = &colorTarget;
-  pipelineDesc.fragment = &fragmentState;
-  pipelineDesc.depthStencil = nullptr;
-  pipelineDesc.multisample.count = 1;
-  pipelineDesc.multisample.mask = ~0u;
-  pipelineDesc.multisample.alphaToCoverageEnabled = false;
-  pipelineDesc.layout = nullptr;
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
 
   wgpuShaderModuleRelease(shaderModule);
@@ -219,82 +220,79 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   wgpuSurfaceGetCurrentTexture(app->surface, &surfaceTexture);
   if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) return SDL_Fail();
 
-  WGPUTextureViewDescriptor viewDescriptor;
-  viewDescriptor.label = "Surface texture view";
-  viewDescriptor.format = wgpuTextureGetFormat(surfaceTexture.texture);
-  viewDescriptor.dimension = WGPUTextureViewDimension_2D;
-  viewDescriptor.baseMipLevel = 0;
-  viewDescriptor.mipLevelCount = 1;
-  viewDescriptor.baseArrayLayer = 0;
-  viewDescriptor.arrayLayerCount = 1;
-  viewDescriptor.aspect = WGPUTextureAspect_All;
+  WGPUTextureViewDescriptor viewDescriptor = {
+    .format = wgpuTextureGetFormat(surfaceTexture.texture),
+    .dimension = WGPUTextureViewDimension_2D,
+    .baseMipLevel = 0,
+    .mipLevelCount = 1,
+    .baseArrayLayer = 0,
+    .arrayLayerCount = 1,
+    .aspect = WGPUTextureAspect_All,
+  };
   WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
 
   // image
-  // WGPUCommandEncoderDescriptor encoderDesc = {};
-  // encoderDesc.label = "My command encoder";
-  // WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
+  WGPUCommandEncoderDescriptor encoderDesc = {};
+  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
 
-  // WGPURenderPassDescriptor renderPassDesc = {};
+  WGPURenderPassColorAttachment renderPassColorAttachment = {};
+  renderPassColorAttachment.view = targetView;
+  renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
+  renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
+  renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
 
-  // WGPURenderPassColorAttachment renderPassColorAttachment = {};
-  // renderPassColorAttachment.view = targetView;
-  // renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
-  // renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
-  // renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
+  WGPURenderPassDescriptor renderPassDesc = {
+    .colorAttachmentCount = 1,
+    .colorAttachments = &renderPassColorAttachment
+  };
 
-  // renderPassDesc.colorAttachmentCount = 1;
-  // renderPassDesc.colorAttachments = &renderPassColorAttachment;
+  WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+  wgpuRenderPassEncoderSetPipeline(renderPass, app->pipeline);
+  wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
+  wgpuRenderPassEncoderEnd(renderPass);
+  wgpuRenderPassEncoderRelease(renderPass);
 
-  // WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
-  // wgpuRenderPassEncoderSetPipeline(renderPass, app->pipeline);
-  // wgpuRenderPassEncoderDraw(renderPass, 3, 1, 0, 0);
-  // wgpuRenderPassEncoderEnd(renderPass);
-  // wgpuRenderPassEncoderRelease(renderPass);
+  WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+  WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+  wgpuCommandEncoderRelease(encoder);
 
-  // WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-  // cmdBufferDescriptor.label = "Command buffer";
-  // WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
-  // wgpuCommandEncoderRelease(encoder);
-
-  // wgpuQueueSubmit(app->queue, 1, &command);
-  // wgpuCommandBufferRelease(command);
+  wgpuQueueSubmit(app->queue, 1, &command);
+  wgpuCommandBufferRelease(command);
 
 
   // gui
-  ImGui_ImplWGPU_NewFrame();
-  ImGui_ImplSDL3_NewFrame();
-  ImGui::NewFrame();
-  bool show_demo_window = true;
-  ImGui::ShowDemoWindow(&show_demo_window);
-  ImGui::Render();
+  // ImGui_ImplWGPU_NewFrame();
+  // ImGui_ImplSDL3_NewFrame();
+  // ImGui::NewFrame();
+  // bool show_demo_window = true;
+  // ImGui::ShowDemoWindow(&show_demo_window);
+  // ImGui::Render();
 
-  WGPURenderPassColorAttachment color_attachments = {};
-  color_attachments.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-  color_attachments.loadOp = WGPULoadOp_Clear;
-  color_attachments.storeOp = WGPUStoreOp_Store;
-  color_attachments.clearValue = WGPUColor{ 0.5, 0.0, 0.2, 1.0 };
-  color_attachments.view = targetView;
+  // WGPURenderPassColorAttachment color_attachments = {
+  //   .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+  //   .loadOp = WGPULoadOp_Clear,
+  //   .storeOp = WGPUStoreOp_Store,
+  //   .clearValue = WGPUColor{ 0.5, 0.0, 0.2, 1.0 },
+  //   .view = targetView,
+  // };
 
-  WGPURenderPassDescriptor render_pass_desc = {};
-  render_pass_desc.colorAttachmentCount = 1;
-  render_pass_desc.colorAttachments = &color_attachments;
-  render_pass_desc.depthStencilAttachment = nullptr;
+  // WGPURenderPassDescriptor render_pass_desc = {
+  //   .colorAttachmentCount = 1,
+  //   .colorAttachments = &color_attachments,
+  // };
 
-  WGPUCommandEncoderDescriptor enc_desc = {};
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &enc_desc);
+  // WGPUCommandEncoderDescriptor enc_desc = {};
+  // WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &enc_desc);
+  // WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
+  // ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
+  // wgpuRenderPassEncoderEnd(pass);
+  // wgpuRenderPassEncoderRelease(pass);
+  // WGPUCommandBufferDescriptor cmd_buffer_desc = {};
+  // WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder, &cmd_buffer_desc);
+  // wgpuCommandEncoderRelease(encoder);
 
-  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
-  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
-  wgpuRenderPassEncoderEnd(pass);
-  wgpuRenderPassEncoderRelease(pass);
-
-  WGPUCommandBufferDescriptor cmd_buffer_desc = {};
-  WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder, &cmd_buffer_desc);
-  wgpuCommandEncoderRelease(encoder);
-
-  wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
-  wgpuCommandBufferRelease(cmd_buffer);
+  // wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
+  // wgpuCommandBufferRelease(cmd_buffer);
 
 
   wgpuTextureViewRelease(targetView);
