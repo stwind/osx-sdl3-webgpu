@@ -239,7 +239,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
   WGPUCommandEncoder encoder1 = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
 
-  WGPURenderPassDescriptor render_pass_desc = {
+  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder1, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
     .colorAttachments = new WGPURenderPassColorAttachment{
       .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
@@ -247,8 +247,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
       .storeOp = WGPUStoreOp_Store,
       .view = targetView,
       },
-  };
-  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder1, &render_pass_desc);
+    });
   ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
   wgpuRenderPassEncoderEnd(pass);
   wgpuRenderPassEncoderRelease(pass);
