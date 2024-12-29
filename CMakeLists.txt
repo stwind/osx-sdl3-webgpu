@@ -26,7 +26,6 @@ include(wgpu)
 add_executable(${TARGET})
 target_sources(${TARGET} PRIVATE sdl3webgpu.h sdl3webgpu.c main.cpp)
 set_source_files_properties("sdl3webgpu.c" PROPERTIES COMPILE_FLAGS "-x objective-c")
-
 target_compile_features(${TARGET} PRIVATE cxx_std_20)
 
 target_link_libraries(${TARGET} 
