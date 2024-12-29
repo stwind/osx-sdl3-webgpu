@@ -106,6 +106,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   wgpuAdapterRelease(adapter);
 
   WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb;
+  int bbwidth, bbheight;
+  SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
   WGPUSurfaceConfiguration surfaceConfiguration = {
     .device = device,
     .format = surfaceFormat,
@@ -113,13 +115,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     .viewFormatCount = 1,
     .viewFormats = &surfaceFormat,
     .alphaMode = WGPUCompositeAlphaMode_Auto,
-    .presentMode = WGPUPresentMode_Fifo
+    .presentMode = WGPUPresentMode_Fifo,
+    .width = (uint32_t)bbwidth,
+    .height = (uint32_t)bbheight,
   };
-
-  int bbwidth, bbheight;
-  SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-  surfaceConfiguration.width = bbwidth;
-  surfaceConfiguration.height = bbheight;
 
   wgpuSurfaceConfigure(surface, &surfaceConfiguration);
   WGPUQueue queue = wgpuDeviceGetQueue(device);
@@ -236,12 +235,12 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &encoderDesc);
 
   WGPURenderPassColorAttachment renderPassColorAttachment = {
+    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
     .view = targetView,
     .loadOp = WGPULoadOp_Clear,
     .storeOp = WGPUStoreOp_Store,
     .clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 },
   };
-
   WGPURenderPassDescriptor renderPassDesc = {
     .colorAttachmentCount = 1,
     .colorAttachments = &renderPassColorAttachment
@@ -262,39 +261,36 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
 
   // gui
-  // ImGui_ImplWGPU_NewFrame();
-  // ImGui_ImplSDL3_NewFrame();
-  // ImGui::NewFrame();
-  // bool show_demo_window = true;
-  // ImGui::ShowDemoWindow(&show_demo_window);
-  // ImGui::Render();
+  ImGui_ImplWGPU_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  ImGui::NewFrame();
+  bool show_demo_window = true;
+  ImGui::ShowDemoWindow(&show_demo_window);
+  ImGui::Render();
 
-  // WGPURenderPassColorAttachment color_attachments = {
-  //   .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-  //   .loadOp = WGPULoadOp_Clear,
-  //   .storeOp = WGPUStoreOp_Store,
-  //   .clearValue = WGPUColor{ 0.5, 0.0, 0.2, 1.0 },
-  //   .view = targetView,
-  // };
+  WGPUCommandEncoderDescriptor enc_desc = {};
+  WGPUCommandEncoder encoder1 = wgpuDeviceCreateCommandEncoder(app->device, &enc_desc);
 
-  // WGPURenderPassDescriptor render_pass_desc = {
-  //   .colorAttachmentCount = 1,
-  //   .colorAttachments = &color_attachments,
-  // };
+  WGPURenderPassColorAttachment color_attachments = {
+    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+    .loadOp = WGPULoadOp_Load,
+    .storeOp = WGPUStoreOp_Store,
+    .view = targetView,
+  };
+  WGPURenderPassDescriptor render_pass_desc = {
+    .colorAttachmentCount = 1,
+    .colorAttachments = &color_attachments,
+  };
+  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder1, &render_pass_desc);
+  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
+  wgpuRenderPassEncoderEnd(pass);
+  wgpuRenderPassEncoderRelease(pass);
+  WGPUCommandBufferDescriptor cmd_buffer_desc = {};
+  WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder1, &cmd_buffer_desc);
+  wgpuCommandEncoderRelease(encoder1);
 
-  // WGPUCommandEncoderDescriptor enc_desc = {};
-  // WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, &enc_desc);
-  // WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &render_pass_desc);
-  // ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
-  // wgpuRenderPassEncoderEnd(pass);
-  // wgpuRenderPassEncoderRelease(pass);
-  // WGPUCommandBufferDescriptor cmd_buffer_desc = {};
-  // WGPUCommandBuffer cmd_buffer = wgpuCommandEncoderFinish(encoder, &cmd_buffer_desc);
-  // wgpuCommandEncoderRelease(encoder);
-
-  // wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
-  // wgpuCommandBufferRelease(cmd_buffer);
-
+  wgpuQueueSubmit(app->queue, 1, &cmd_buffer);
+  wgpuCommandBufferRelease(cmd_buffer);
 
   wgpuTextureViewRelease(targetView);
   wgpuSurfacePresent(app->surface);
