@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12.0)
-project(basic LANGUAGES C CXX OBJC)
+project(app LANGUAGES C CXX OBJC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,7 +16,7 @@ include(sdl3)
 include(wgpu)
 include(imgui)
 
-set(TARGET app)
+set(TARGET ${PROJECT_NAME})
 
 file(GLOB_RECURSE LIB_SOURCES "${ROOT}/lib/*")
 

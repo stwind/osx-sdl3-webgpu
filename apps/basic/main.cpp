@@ -55,7 +55,7 @@ fn fs_main() -> @location(0) vec4f {
 }
 )";
 
-bool ImGui_init(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
+bool ImGui_init(SDL_Window* window, WGPUDevice device, WGPUTextureFormat format) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -67,9 +67,7 @@ bool ImGui_init(SDL_Window* window, WGPUDevice device, WGPUTextureFormat surface
 
   ImGui_ImplWGPU_InitInfo init_info;
   init_info.Device = device;
-  init_info.NumFramesInFlight = 3;
-  init_info.RenderTargetFormat = surfaceFormat;
-  init_info.DepthStencilFormat = WGPUTextureFormat_Undefined;
+  init_info.RenderTargetFormat = format;
   return ImGui_ImplWGPU_Init(&init_info);
 };
 
@@ -159,21 +157,19 @@ WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
 struct AppState {
   SDL_Window* window;
 
-  struct WGPU {
+  struct {
     WGPUDevice device;
     WGPUSurface surface;
     WGPUQueue queue;
     WGPURenderPipeline pipeline;
     WGPUBindGroup bindGroup;
     WGPUBuffer uniforms;
-  };
-  WGPU wgpu;
+  } wgpu;
 
-  struct State {
+  struct {
     bool show_demo = false;
     float alpha = .5;
-  };
-  State state;
+  } state;
 };
 
 SDL_AppResult SDL_Fail() {
@@ -201,23 +197,22 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   configureSurface(window, surface, device, surfaceFormat);
 
   WGPUShaderModule shaderModule = createShaderModule(device, shaderSource);
-
-  WGPUBindGroupLayout bindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, new WGPUBindGroupLayoutDescriptor{
-    .entryCount = 1,
-    .entries = new WGPUBindGroupLayoutEntry{
-      .binding = 0,
-      .visibility = WGPUShaderStage_Fragment,
-      .buffer = {
-        .type = WGPUBufferBindingType_Uniform,
-        .minBindingSize = 4 * sizeof(float),
-      },
-      },
-    });
-
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
     .layout = wgpuDeviceCreatePipelineLayout(device, new WGPUPipelineLayoutDescriptor{
       .bindGroupLayoutCount = 1,
-      .bindGroupLayouts = &bindGroupLayout,
+      .bindGroupLayouts = new WGPUBindGroupLayout[1]{
+        wgpuDeviceCreateBindGroupLayout(device, new WGPUBindGroupLayoutDescriptor{
+          .entryCount = 1,
+          .entries = new WGPUBindGroupLayoutEntry{
+            .binding = 0,
+            .visibility = WGPUShaderStage_Fragment,
+            .buffer = {
+              .type = WGPUBufferBindingType_Uniform,
+              .minBindingSize = 4 * sizeof(float),
+            },
+            },
+          })
+      }
       }),
     .vertex = {
       .bufferCount = 0,
@@ -290,18 +285,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   };
   if (not ImGui_init(window, device, surfaceFormat)) return SDL_Fail();
 
-  SDL_ShowWindow(window);
-  {
-    int width, height, bbwidth, bbheight;
-    SDL_GetWindowSize(window, &width, &height);
-    SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-    SDL_Log("Window size: %ix%i", width, height);
-    SDL_Log("Backbuffer size: %ix%i", bbwidth, bbheight);
-    if (width != bbwidth) {
-      SDL_Log("This is a highdpi environment.");
-    }
-  }
-
   SDL_Log("Started");
   return SDL_APP_CONTINUE;
 };
@@ -353,7 +336,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
   if (state->show_demo) ImGui::ShowDemoWindow();
-
   {
     ImGui::Begin("Controls");
 
@@ -362,7 +344,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     ImGui::End();
   }
-
   ImGui::Render();
 
   ImGui_render(wgpu.device, view, wgpu.queue);

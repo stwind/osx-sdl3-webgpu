@@ -6,22 +6,18 @@
 #include "sdl3webgpu.h"
 
 WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window) {
-        SDL_PropertiesID props = SDL_GetWindowProperties(window);
-        NSWindow* ns_window = (__bridge NSWindow*)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
+        NSWindow* ns_window = (__bridge NSWindow*)SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
         if (!ns_window) return NULL;
-        [ns_window.contentView setWantsLayer : YES] ;
-
-        id metal_layer = [CAMetalLayer layer];
-        [ns_window.contentView setLayer : metal_layer] ;
+        [ns_window.contentView setWantsLayer : YES];
+        [ns_window.contentView setLayer : [CAMetalLayer layer]];
 
         WGPUSurfaceDescriptorFromMetalLayer fromMetalLayer;
         fromMetalLayer.chain.sType = WGPUSType_SurfaceDescriptorFromMetalLayer;
         fromMetalLayer.chain.next = NULL;
-        fromMetalLayer.layer = metal_layer;
+        fromMetalLayer.layer = ns_window.contentView.layer;
 
         WGPUSurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromMetalLayer.chain;
-        surfaceDescriptor.label = NULL;
 
         return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
 }
