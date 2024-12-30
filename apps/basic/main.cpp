@@ -64,18 +64,6 @@ void ImGui_render(WGPU* wgpu, WGPUTextureView view) {
   wgpuCommandBufferRelease(command);
 };
 
-WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
-  WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
-    .code = shaderSource,
-    .chain = {
-      .sType = WGPUSType_ShaderModuleWGSLDescriptor
-    }
-  };
-  return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
-    .nextInChain = &shaderCodeDesc.chain
-    });
-};
-
 class Application {
 public:
   WGPU wgpu = WGPU(1280, 720);
@@ -102,7 +90,7 @@ public:
     vertexBuffer = wgpuDeviceCreateBuffer(wgpu.device, &bufferDesc);
     wgpuQueueWriteBuffer(wgpu.queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
-    WGPUShaderModule shaderModule = createShaderModule(wgpu.device, shaderSource);
+    WGPUShaderModule shaderModule = wgpu.createShaderModule(shaderSource);
     pipeline = wgpuDeviceCreateRenderPipeline(wgpu.device, new WGPURenderPipelineDescriptor{
       .layout = wgpuDeviceCreatePipelineLayout(wgpu.device, new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,

@@ -111,6 +111,30 @@ public:
     SDL_DestroyWindow(window);
   }
 
+  WGPUShaderModule createShaderModule(const char* source) {
+    WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
+      .code = source,
+      .chain = {
+        .sType = WGPUSType_ShaderModuleWGSLDescriptor
+      }
+    };
+    return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
+      .nextInChain = &shaderCodeDesc.chain
+      });
+  };
+
+  WGPURenderPipeline createRenderPipeline(const WGPURenderPipelineDescriptor* descripter) {
+    return wgpuDeviceCreateRenderPipeline(device, descripter);
+  }
+
+  WGPUCommandEncoder createCommandEncoder(const WGPUCommandEncoderDescriptor* descripter) {
+    return wgpuDeviceCreateCommandEncoder(device, descripter);
+  }
+
+  void queueSubmit(size_t count, const WGPUCommandBuffer* commands) {
+    wgpuQueueSubmit(queue, count, commands);
+  }
+
   WGPUTextureView surfaceTextureCreateView() {
     wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
     return wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{

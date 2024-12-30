@@ -17,21 +17,9 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) ve
 
 @fragment
 fn fs_main() -> @location(0) vec4f {
-	return vec4f(1., .4, 1., 1.);
+	return vec4f(pow(vec3f(1., .4, 1.), vec3f(2.2)), 1.);
 }
 )";
-
-WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
-  WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
-    .code = shaderSource,
-    .chain = {
-      .sType = WGPUSType_ShaderModuleWGSLDescriptor
-    }
-  };
-  return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
-    .nextInChain = &shaderCodeDesc.chain
-    });
-};
 
 class Application {
 public:
@@ -39,8 +27,8 @@ public:
   WGPURenderPipeline pipeline;
 
   Application() {
-    WGPUShaderModule shaderModule = createShaderModule(wgpu.device, shaderSource);
-    pipeline = wgpuDeviceCreateRenderPipeline(wgpu.device, new WGPURenderPipelineDescriptor{
+    WGPUShaderModule shaderModule = wgpu.createShaderModule(shaderSource);
+    pipeline = wgpu.createRenderPipeline(new WGPURenderPipelineDescriptor{
       .vertex = {
         .bufferCount = 0,
         .module = shaderModule,
@@ -89,19 +77,9 @@ public:
   }
 
   void render() {
-    WGPUSurfaceTexture surfaceTexture;
-    wgpuSurfaceGetCurrentTexture(wgpu.surface, &surfaceTexture);
-    WGPUTextureView view = wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
-      .format = wgpuTextureGetFormat(surfaceTexture.texture),
-      .dimension = WGPUTextureViewDimension_2D,
-      .baseMipLevel = 0,
-      .mipLevelCount = 1,
-      .baseArrayLayer = 0,
-      .arrayLayerCount = 1,
-      .aspect = WGPUTextureAspect_All,
-      });
+    WGPUTextureView view = wgpu.surfaceTextureCreateView();
 
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu.device, new WGPUCommandEncoderDescriptor{});
+    WGPUCommandEncoder encoder = wgpu.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
       .colorAttachments = new WGPURenderPassColorAttachment{
@@ -118,12 +96,11 @@ public:
     wgpuRenderPassEncoderRelease(pass);
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
     wgpuCommandEncoderRelease(encoder);
-    wgpuQueueSubmit(wgpu.queue, 1, &command);
+    wgpu.queueSubmit(1, &command);
     wgpuCommandBufferRelease(command);
 
-    wgpuTextureViewRelease(view);
     wgpu.present();
-    wgpuTextureRelease(surfaceTexture.texture);
+    wgpu.surfaceTextureViewRelease(view);
   }
 };
 
