@@ -5,16 +5,25 @@
 #include "imgui_impl_wgpu.h"
 
 const char* shaderSource = R"(
-@vertex
-fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
-	return vec4f(position, 0, 1);
+struct VSOutput {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec3f,
+};
+
+@vertex fn vs_main(
+  @location(0) position: vec2f,
+  @location(1) color: vec3f) -> VSOutput {
+
+	var vsOut: VSOutput;
+  vsOut.position = vec4f(position, 0, 1);
+  vsOut.color = color;
+  return vsOut;
 }
 
 @group(0) @binding(0) var<uniform> uAlpha: f32;
 
-@fragment
-fn fs_main() -> @location(0) vec4f {
-	return vec4f(1., .4, 1., uAlpha);
+@fragment fn fs_main(@location(0) color: vec3f) -> @location(0) vec4f {
+	return vec4f(pow(color, vec3f(2.2)), uAlpha);
 }
 )";
 
@@ -80,14 +89,15 @@ public:
   } state;
 
   Application() {
-    std::vector<float> vertexData = { -0.5, -0.5, +0.5, -0.5, 0., .5 };
-    auto vertexCount = static_cast<uint32_t>(vertexData.size() / 2);
-
+    std::vector<float> vertexData = {
+      -0.5, -0.5, 1, 0, 0,
+      +0.5, -0.5, 0, 1, 0,
+      0., .5, 0, 0, 1
+    };
     WGPUBufferDescriptor bufferDesc = {
       .size = vertexData.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
     };
-
     vertexBuffer = wgpuDeviceCreateBuffer(wgpu.device, &bufferDesc);
     wgpuQueueWriteBuffer(wgpu.queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
@@ -113,11 +123,12 @@ public:
         .bufferCount = 1,
         .buffers = new WGPUVertexBufferLayout[1]{
           {
-            .attributeCount = 1,
-            .attributes = new WGPUVertexAttribute[1]{
-              {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x2, .offset = 0 }
+            .attributeCount = 2,
+            .attributes = new WGPUVertexAttribute[2]{
+              {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x2, .offset = 0 },
+              {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 2 * sizeof(float) }
               },
-            .arrayStride = 2 * sizeof(float),
+            .arrayStride = 5 * sizeof(float),
             .stepMode = WGPUVertexStepMode_Vertex
           }
         },
