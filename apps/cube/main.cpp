@@ -58,8 +58,8 @@ public:
       .size = vertexData.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
     };
-    vertexBuffer = wgpuDeviceCreateBuffer(wgpu.device, &bufferDesc);
-    wgpuQueueWriteBuffer(wgpu.queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+    vertexBuffer = wgpu.createBuffer(&bufferDesc);
+    wgpu.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
     std::vector<uint16_t> indexData = {
       0, 1, 2,
@@ -78,8 +78,8 @@ public:
     bufferDesc.size = indexData.size() * sizeof(uint16_t);
     bufferDesc.size = (bufferDesc.size + 3) & ~3; // round up to the next multiple of 4
     bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;;
-    indexBuffer = wgpuDeviceCreateBuffer(wgpu.device, &bufferDesc);
-    wgpuQueueWriteBuffer(wgpu.queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
+    indexBuffer = wgpu.createBuffer(&bufferDesc);
+    wgpu.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
     WGPUShaderModule shaderModule = wgpu.createShaderModule(shaderSource);
     pipeline = wgpu.createRenderPipeline(new WGPURenderPipelineDescriptor{
