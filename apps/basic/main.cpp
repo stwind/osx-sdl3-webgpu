@@ -157,10 +157,18 @@ WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
 struct AppState {
   SDL_Window* window;
 
-  WGPUDevice device;
-  WGPUSurface surface;
-  WGPUQueue queue;
-  WGPURenderPipeline pipeline;
+  struct WGPU {
+    WGPUDevice device;
+    WGPUSurface surface;
+    WGPUQueue queue;
+    WGPURenderPipeline pipeline;
+  };
+  WGPU wgpu;
+
+  struct State {
+    bool show_demo = true;
+  };
+  State state;
 };
 
 SDL_AppResult SDL_Fail() {
@@ -234,10 +242,16 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   *appstate = new AppState{
     .window = window,
-    .device = device,
-    .surface = surface,
-    .queue = wgpuDeviceGetQueue(device),
-    .pipeline = pipeline,
+    .wgpu = {
+      .device = device,
+      .surface = surface,
+      .queue = wgpuDeviceGetQueue(device),
+      .pipeline = pipeline,
+    }
+    // .device = device,
+    // .surface = surface,
+    // .queue = wgpuDeviceGetQueue(device),
+    // .pipeline = pipeline,
   };
   if (not ImGui_init(window, device, surfaceFormat)) return SDL_Fail();
 
@@ -259,9 +273,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
   auto* app = (AppState*)appstate;
+  auto wgpu = app->wgpu;
+  auto state = &app->state;
 
   WGPUSurfaceTexture surfaceTexture;
-  wgpuSurfaceGetCurrentTexture(app->surface, &surfaceTexture);
+  wgpuSurfaceGetCurrentTexture(wgpu.surface, &surfaceTexture);
   if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) return SDL_Fail();
 
   WGPUTextureView view = wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
@@ -275,7 +291,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     });
 
   // image
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
+  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu.device, new WGPUCommandEncoderDescriptor{});
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
     .colorAttachments = new WGPURenderPassColorAttachment{
@@ -286,26 +302,35 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
       .clearValue = WGPUColor{ 0., 0., 0., 1. },
     }
     });
-  wgpuRenderPassEncoderSetPipeline(pass, app->pipeline);
+  wgpuRenderPassEncoderSetPipeline(pass, wgpu.pipeline);
   wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
   wgpuRenderPassEncoderEnd(pass);
   wgpuRenderPassEncoderRelease(pass);
   WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder);
-  wgpuQueueSubmit(app->queue, 1, &command);
+  wgpuQueueSubmit(wgpu.queue, 1, &command);
   wgpuCommandBufferRelease(command);
 
   // gui
   ImGui_ImplWGPU_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
-  ImGui::ShowDemoWindow();
+  if (state->show_demo) ImGui::ShowDemoWindow();
+
+  {
+    ImGui::Begin("Controls");
+
+    ImGui::Checkbox("Demo Window", &state->show_demo);
+
+    ImGui::End();
+  }
+
   ImGui::Render();
 
-  ImGui_render(app->device, view, app->queue);
+  ImGui_render(wgpu.device, view, wgpu.queue);
 
   wgpuTextureViewRelease(view);
-  wgpuSurfacePresent(app->surface);
+  wgpuSurfacePresent(wgpu.surface);
   wgpuTextureRelease(surfaceTexture.texture);
 
   return SDL_APP_CONTINUE;
@@ -325,11 +350,14 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
   ImGui::DestroyContext();
 
   auto* app = (AppState*)appstate;
-  wgpuRenderPipelineRelease(app->pipeline);
-  wgpuQueueRelease(app->queue);
-  wgpuDeviceRelease(app->device);
-  wgpuSurfaceUnconfigure(app->surface);
-  wgpuSurfaceRelease(app->surface);
+
+  auto wgpu = app->wgpu;
+  wgpuRenderPipelineRelease(wgpu.pipeline);
+  wgpuQueueRelease(wgpu.queue);
+  wgpuDeviceRelease(wgpu.device);
+  wgpuSurfaceUnconfigure(wgpu.surface);
+  wgpuSurfaceRelease(wgpu.surface);
+
   SDL_DestroyWindow(app->window);
   delete app;
 
