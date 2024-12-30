@@ -2,9 +2,7 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_log.h>
 #include <iostream>
-#include <webgpu.h>
-#include <wgpu.h>
-#include "application.hpp"
+#include "wgpu.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_wgpu.h"
@@ -79,20 +77,25 @@ WGPUShaderModule createShaderModule(WGPUDevice device, const char* source) {
     });
 };
 
-struct State {
-  bool show_demo = false;
-  float alpha = .5;
-};
-
-class Renderer {
+class Application {
 public:
-  Renderer(Application* app) : app(app) {
-    WGPUShaderModule shaderModule = createShaderModule(app->device, shaderSource);
-    pipeline = wgpuDeviceCreateRenderPipeline(app->device, new WGPURenderPipelineDescriptor{
-      .layout = wgpuDeviceCreatePipelineLayout(app->device, new WGPUPipelineLayoutDescriptor{
+  WGPU wgpu = WGPU(1280, 720);
+  WGPURenderPipeline pipeline;
+  WGPUBuffer uniforms;
+  WGPUBindGroup bindGroup;
+
+  struct {
+    bool show_demo = false;
+    float alpha = .5;
+  } state;
+
+  Application() {
+    WGPUShaderModule shaderModule = createShaderModule(wgpu.device, shaderSource);
+    pipeline = wgpuDeviceCreateRenderPipeline(wgpu.device, new WGPURenderPipelineDescriptor{
+      .layout = wgpuDeviceCreatePipelineLayout(wgpu.device, new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,
         .bindGroupLayouts = new WGPUBindGroupLayout[1]{
-          wgpuDeviceCreateBindGroupLayout(app->device, new WGPUBindGroupLayoutDescriptor{
+          wgpuDeviceCreateBindGroupLayout(wgpu.device, new WGPUBindGroupLayoutDescriptor{
             .entryCount = 1,
             .entries = new WGPUBindGroupLayoutEntry{
               .binding = 0,
@@ -123,7 +126,7 @@ public:
         .constantCount = 0,
         .targetCount = 1,
         .targets = new WGPUColorTargetState{
-          .format = app->surfaceFormat,
+          .format = wgpu.surfaceFormat,
           .blend = new WGPUBlendState{
             .color = {
               .srcFactor = WGPUBlendFactor_SrcAlpha,
@@ -147,12 +150,12 @@ public:
       });
     wgpuShaderModuleRelease(shaderModule);
 
-    uniforms = wgpuDeviceCreateBuffer(app->device, new WGPUBufferDescriptor{
+    uniforms = wgpuDeviceCreateBuffer(wgpu.device, new WGPUBufferDescriptor{
       .size = 4 * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
       });
-    bindGroup = wgpuDeviceCreateBindGroup(app->device, new WGPUBindGroupDescriptor{
+    bindGroup = wgpuDeviceCreateBindGroup(wgpu.device, new WGPUBindGroupDescriptor{
       .layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0),
       .entryCount = 1,
       .entries = new WGPUBindGroupEntry{
@@ -162,19 +165,19 @@ public:
         .size = 4 * sizeof(float),
         },
       });
-    if (!ImGui_init(app->window, app->device, app->surfaceFormat))
+    if (!ImGui_init(wgpu.window, wgpu.device, wgpu.surfaceFormat))
       throw std::runtime_error("ImGui_init failed");
   }
 
-  ~Renderer() {
+  ~Application() {
     wgpuRenderPipelineRelease(pipeline);
     wgpuBufferRelease(uniforms);
     wgpuBindGroupRelease(bindGroup);
   }
 
-  void render(State* state) {
+  void render() {
     WGPUSurfaceTexture surfaceTexture;
-    wgpuSurfaceGetCurrentTexture(app->surface, &surfaceTexture);
+    wgpuSurfaceGetCurrentTexture(wgpu.surface, &surfaceTexture);
 
     WGPUTextureView view = wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
       .format = wgpuTextureGetFormat(surfaceTexture.texture),
@@ -186,8 +189,8 @@ public:
       .aspect = WGPUTextureAspect_All,
       });
 
-    wgpuQueueWriteBuffer(app->queue, uniforms, 0, &state->alpha, sizeof(float));
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(app->device, new WGPUCommandEncoderDescriptor{});
+    wgpuQueueWriteBuffer(wgpu.queue, uniforms, 0, &state.alpha, sizeof(float));
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu.device, new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
       .colorAttachments = new WGPURenderPassColorAttachment{
@@ -205,41 +208,34 @@ public:
     wgpuRenderPassEncoderRelease(pass);
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
     wgpuCommandEncoderRelease(encoder);
-    wgpuQueueSubmit(app->queue, 1, &command);
+    wgpuQueueSubmit(wgpu.queue, 1, &command);
     wgpuCommandBufferRelease(command);
 
     ImGui_ImplWGPU_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
-    if (state->show_demo) ImGui::ShowDemoWindow();
+    if (state.show_demo) ImGui::ShowDemoWindow();
     {
       ImGui::Begin("Controls");
 
-      ImGui::Checkbox("Demo Window", &state->show_demo);
-      ImGui::SliderFloat("alpha", &state->alpha, 0.0f, 1.0f);
+      ImGui::Checkbox("Demo Window", &state.show_demo);
+      ImGui::SliderFloat("alpha", &state.alpha, 0.0f, 1.0f);
 
       ImGui::End();
     }
     ImGui::Render();
 
-    ImGui_render(app->device, view, app->queue);
+    ImGui_render(wgpu.device, view, wgpu.queue);
 
     wgpuTextureViewRelease(view);
-    app->present();
+    wgpu.present();
     wgpuTextureRelease(surfaceTexture.texture);
   }
-
-  Application* app;
-  WGPURenderPipeline pipeline;
-  WGPUBuffer uniforms;
-  WGPUBindGroup bindGroup;
 };
 
 int main(int argc, char** argv) try {
-  Application application;
-  Renderer renderer(&application);
+  Application app;
 
-  State state;
   SDL_Event event;
   for (bool running = true; running;) {
     while (SDL_PollEvent(&event)) {
@@ -247,10 +243,10 @@ int main(int argc, char** argv) try {
       if (event.type == SDL_EVENT_QUIT) running = false;
     }
 
-    renderer.render(&state);
+    app.render();
   }
 
-  SDL_Log("Application quit successfully!");
+  SDL_Log("Quit");
 }
 catch (std::exception const& e) {
   std::cerr << e.what() << std::endl;

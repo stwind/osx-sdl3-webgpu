@@ -77,13 +77,19 @@ void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device
     });
 }
 
-class Application {
+class WGPU {
 public:
-  Application(WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb) : surfaceFormat(surfaceFormat) {
+  SDL_Window* window;
+  WGPUSurface surface;
+  WGPUDevice device;
+  WGPUQueue queue;
+  WGPUTextureFormat surfaceFormat;
+
+  WGPU(int w, int h, WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb) : surfaceFormat(surfaceFormat) {
     SDL_SetLogOutputFunction(LogOutputFunction, NULL);
     if (!SDL_Init(SDL_INIT_VIDEO)) throw std::runtime_error("SDL_Init failed");
 
-    window = SDL_CreateWindow("Window", 1280, 720, SDL_WINDOW_HIGH_PIXEL_DENSITY);
+    window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (window == nullptr) throw std::runtime_error("SDL_CreateWindow failed");
 
     WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
@@ -96,7 +102,7 @@ public:
     queue = wgpuDeviceGetQueue(device);
   }
 
-  ~Application() {
+  ~WGPU() {
     wgpuDeviceRelease(device);
     wgpuSurfaceUnconfigure(surface);
     wgpuSurfaceRelease(surface);
@@ -107,10 +113,4 @@ public:
   void present() {
     wgpuSurfacePresent(surface);
   }
-
-  SDL_Window* window;
-  WGPUSurface surface;
-  WGPUDevice device;
-  WGPUQueue queue;
-  WGPUTextureFormat surfaceFormat;
 };
