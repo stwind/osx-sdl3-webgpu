@@ -89,7 +89,7 @@ public:
     SDL_SetLogOutputFunction(LogOutputFunction, NULL);
     if (!SDL_Init(SDL_INIT_VIDEO)) throw std::runtime_error("SDL_Init failed");
 
-    window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_HIGH_PIXEL_DENSITY);
+    window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_METAL);
     if (window == nullptr) throw std::runtime_error("SDL_CreateWindow failed");
 
     WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});

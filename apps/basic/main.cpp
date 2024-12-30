@@ -27,24 +27,23 @@ struct VSOutput {
 }
 )";
 
-bool ImGui_init(SDL_Window* window, WGPUDevice device, WGPUTextureFormat format) {
+bool ImGui_init(WGPU* wgpu) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO(); (void)io;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
   io.IniFilename = nullptr;
   ImGui::StyleColorsDark();
-  ImGui_ImplSDL3_InitForOther(window);
+  ImGui_ImplSDL3_InitForOther(wgpu->window);
 
   ImGui_ImplWGPU_InitInfo init_info;
-  init_info.Device = device;
-  init_info.RenderTargetFormat = format;
+  init_info.Device = wgpu->device;
+  init_info.RenderTargetFormat = wgpu->surfaceFormat;
   return ImGui_ImplWGPU_Init(&init_info);
 };
 
-void ImGui_render(WGPUDevice device, WGPUTextureView view, WGPUQueue queue) {
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, new WGPUCommandEncoderDescriptor{});
+void ImGui_render(WGPU* wgpu, WGPUTextureView view) {
+  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu->device, new WGPUCommandEncoderDescriptor{});
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
     .colorAttachments = new WGPURenderPassColorAttachment{
@@ -59,7 +58,7 @@ void ImGui_render(WGPUDevice device, WGPUTextureView view, WGPUQueue queue) {
   wgpuRenderPassEncoderRelease(pass);
   WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder);
-  wgpuQueueSubmit(queue, 1, &command);
+  wgpuQueueSubmit(wgpu->queue, 1, &command);
   wgpuCommandBufferRelease(command);
 };
 
@@ -187,8 +186,8 @@ public:
         .size = 4 * sizeof(float),
         },
       });
-    if (!ImGui_init(wgpu.window, wgpu.device, wgpu.surfaceFormat))
-      throw std::runtime_error("ImGui_init failed");
+
+    if (!ImGui_init(&wgpu)) throw std::runtime_error("ImGui_init failed");
   }
 
   ~Application() {
@@ -248,7 +247,7 @@ public:
     }
     ImGui::Render();
 
-    ImGui_render(wgpu.device, view, wgpu.queue);
+    ImGui_render(&wgpu, view);
 
     wgpuTextureViewRelease(view);
     wgpu.present();
