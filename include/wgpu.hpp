@@ -111,20 +111,20 @@ public:
     SDL_DestroyWindow(window);
   }
 
-  WGPUTextureView SurfaceTextureCreateView() {
+  WGPUTextureView surfaceTextureCreateView() {
     wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
     return wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
-     .format = wgpuTextureGetFormat(surfaceTexture.texture),
-     .dimension = WGPUTextureViewDimension_2D,
-     .baseMipLevel = 0,
-     .mipLevelCount = 1,
-     .baseArrayLayer = 0,
-     .arrayLayerCount = 1,
-     .aspect = WGPUTextureAspect_All,
+      .format = wgpuTextureGetFormat(surfaceTexture.texture),
+      .dimension = WGPUTextureViewDimension_2D,
+      .baseMipLevel = 0,
+      .mipLevelCount = 1,
+      .baseArrayLayer = 0,
+      .arrayLayerCount = 1,
+      .aspect = WGPUTextureAspect_All,
       });
   }
 
-  void SurfaceTextureViewRelease(WGPUTextureView view) {
+  void surfaceTextureViewRelease(WGPUTextureView view) {
     wgpuTextureViewRelease(view);
     wgpuTextureRelease(surfaceTexture.texture);
   }

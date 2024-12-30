@@ -200,9 +200,10 @@ public:
   }
 
   void render() {
-    WGPUTextureView view = wgpu.SurfaceTextureCreateView();
+    WGPUTextureView view = wgpu.surfaceTextureCreateView();
 
     wgpuQueueWriteBuffer(wgpu.queue, uniforms, 0, &state.alpha, sizeof(float));
+
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu.device, new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
@@ -242,7 +243,7 @@ public:
     ImGui_render(&wgpu, view);
 
     wgpu.present();
-    wgpu.SurfaceTextureViewRelease(view);
+    wgpu.surfaceTextureViewRelease(view);
   }
 };
 
