@@ -114,7 +114,7 @@ public:
           {
             .attributeCount = 2,
             .attributes = new WGPUVertexAttribute[2]{
-              {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x2, .offset = 0 },
+              {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
               {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 2 * sizeof(float) }
               },
             .arrayStride = 5 * sizeof(float),

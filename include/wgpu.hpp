@@ -104,6 +104,7 @@ public:
   }
 
   ~WGPU() {
+    wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
     wgpuSurfaceUnconfigure(surface);
     wgpuSurfaceRelease(surface);
