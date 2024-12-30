@@ -202,39 +202,16 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   WGPUShaderModule shaderModule = createShaderModule(device, shaderSource);
 
-
-  WGPUBuffer uniforms = wgpuDeviceCreateBuffer(device, new WGPUBufferDescriptor{
-    .size = 4 * sizeof(float),
-    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-    .mappedAtCreation = false,
-    });
-
-  WGPUBindGroupLayoutEntry bindingLayout = {
-    .buffer = {
-      .type = WGPUBufferBindingType_Uniform,
-      .minBindingSize = 4 * sizeof(float),
-      .hasDynamicOffset = false,
-    },
-    .sampler = {
-      .type = WGPUSamplerBindingType_Undefined,
-    },
-    .storageTexture = {
-      .access = WGPUStorageTextureAccess_Undefined,
-      .format = WGPUTextureFormat_Undefined,
-      .viewDimension = WGPUTextureViewDimension_Undefined,
-    },
-    .texture = {
-      .multisampled = false,
-      .sampleType = WGPUTextureSampleType_Undefined,
-      .viewDimension = WGPUTextureViewDimension_Undefined
-    },
-    .binding = 0,
-    .visibility = WGPUShaderStage_Fragment,
-  };
-
   WGPUBindGroupLayout bindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, new WGPUBindGroupLayoutDescriptor{
     .entryCount = 1,
-    .entries = &bindingLayout,
+    .entries = new WGPUBindGroupLayoutEntry{
+      .binding = 0,
+      .visibility = WGPUShaderStage_Fragment,
+      .buffer = {
+        .type = WGPUBufferBindingType_Uniform,
+        .minBindingSize = 4 * sizeof(float),
+      },
+      },
     });
 
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
@@ -284,15 +261,20 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     });
   wgpuShaderModuleRelease(shaderModule);
 
-  WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(device, new WGPUBindGroupDescriptor{
-  .layout = bindGroupLayout,
-  .entryCount = 1,
-  .entries = new WGPUBindGroupEntry{
-    .binding = 0,
-    .buffer = uniforms,
-    .offset = 0,
+  WGPUBuffer uniforms = wgpuDeviceCreateBuffer(device, new WGPUBufferDescriptor{
     .size = 4 * sizeof(float),
-    },
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+    .mappedAtCreation = false,
+    });
+  WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(device, new WGPUBindGroupDescriptor{
+    .layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0),
+    .entryCount = 1,
+    .entries = new WGPUBindGroupEntry{
+      .binding = 0,
+      .buffer = uniforms,
+      .offset = 0,
+      .size = 4 * sizeof(float),
+      },
     });
 
   *appstate = new AppState{
