@@ -112,6 +112,14 @@ public:
     SDL_DestroyWindow(window);
   }
 
+  WGPUBuffer createBuffer(const WGPUBufferDescriptor* descripter) {
+    return wgpuDeviceCreateBuffer(device, descripter);
+  }
+
+  void writeBuffer(WGPUBuffer buffer, uint64_t offset, const void* data, size_t size) {
+    wgpuQueueWriteBuffer(queue, buffer, 0, data, size);
+  }
+
   WGPUShaderModule createShaderModule(const char* source) {
     WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
       .code = source,
@@ -126,6 +134,18 @@ public:
 
   WGPURenderPipeline createRenderPipeline(const WGPURenderPipelineDescriptor* descripter) {
     return wgpuDeviceCreateRenderPipeline(device, descripter);
+  }
+
+  WGPUPipelineLayout createPipelineLayout(const WGPUPipelineLayoutDescriptor* descripter) {
+    return wgpuDeviceCreatePipelineLayout(device, descripter);
+  }
+
+  WGPUBindGroup createBindGroup(const WGPUBindGroupDescriptor* descripter) {
+    return wgpuDeviceCreateBindGroup(device, descripter);
+  }
+
+  WGPUBindGroupLayout createBindGroupLayout(const WGPUBindGroupLayoutDescriptor* descripter) {
+    return wgpuDeviceCreateBindGroupLayout(device, descripter);
   }
 
   WGPUCommandEncoder createCommandEncoder(const WGPUCommandEncoderDescriptor* descripter) {

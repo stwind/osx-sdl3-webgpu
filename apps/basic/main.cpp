@@ -14,10 +14,7 @@ struct VSOutput {
   @location(0) position: vec2f,
   @location(1) color: vec3f) -> VSOutput {
 
-	var vsOut: VSOutput;
-  vsOut.position = vec4f(position, 0, 1);
-  vsOut.color = color;
-  return vsOut;
+  return VSOutput(vec4f(position, 0, 1), color);
 }
 
 @group(0) @binding(0) var<uniform> uAlpha: f32;
@@ -43,7 +40,7 @@ bool ImGui_init(WGPU* wgpu) {
 };
 
 void ImGui_render(WGPU* wgpu, WGPUTextureView view) {
-  WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu->device, new WGPUCommandEncoderDescriptor{});
+  WGPUCommandEncoder encoder = wgpu->createCommandEncoder(new WGPUCommandEncoderDescriptor{});
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
     .colorAttachments = new WGPURenderPassColorAttachment[1]{
@@ -60,7 +57,7 @@ void ImGui_render(WGPU* wgpu, WGPUTextureView view) {
   wgpuRenderPassEncoderRelease(pass);
   WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder);
-  wgpuQueueSubmit(wgpu->queue, 1, &command);
+  wgpu->queueSubmit(1, &command);
   wgpuCommandBufferRelease(command);
 };
 
@@ -87,15 +84,15 @@ public:
       .size = vertexData.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
     };
-    vertexBuffer = wgpuDeviceCreateBuffer(wgpu.device, &bufferDesc);
-    wgpuQueueWriteBuffer(wgpu.queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+    vertexBuffer = wgpu.createBuffer(&bufferDesc);
+    wgpu.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
     WGPUShaderModule shaderModule = wgpu.createShaderModule(shaderSource);
-    pipeline = wgpuDeviceCreateRenderPipeline(wgpu.device, new WGPURenderPipelineDescriptor{
-      .layout = wgpuDeviceCreatePipelineLayout(wgpu.device, new WGPUPipelineLayoutDescriptor{
+    pipeline = wgpu.createRenderPipeline(new WGPURenderPipelineDescriptor{
+      .layout = wgpu.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,
         .bindGroupLayouts = new WGPUBindGroupLayout[1]{
-          wgpuDeviceCreateBindGroupLayout(wgpu.device, new WGPUBindGroupLayoutDescriptor{
+          wgpu.createBindGroupLayout(new WGPUBindGroupLayoutDescriptor{
             .entryCount = 1,
             .entries = new WGPUBindGroupLayoutEntry{
               .binding = 0,
@@ -161,12 +158,12 @@ public:
       });
     wgpuShaderModuleRelease(shaderModule);
 
-    uniforms = wgpuDeviceCreateBuffer(wgpu.device, new WGPUBufferDescriptor{
+    uniforms = wgpu.createBuffer(new WGPUBufferDescriptor{
       .size = 4 * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
       });
-    bindGroup = wgpuDeviceCreateBindGroup(wgpu.device, new WGPUBindGroupDescriptor{
+    bindGroup = wgpu.createBindGroup(new WGPUBindGroupDescriptor{
       .layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0),
       .entryCount = 1,
       .entries = new WGPUBindGroupEntry{
@@ -190,17 +187,17 @@ public:
   void render() {
     WGPUTextureView view = wgpu.surfaceTextureCreateView();
 
-    wgpuQueueWriteBuffer(wgpu.queue, uniforms, 0, &state.alpha, sizeof(float));
+    wgpu.writeBuffer(uniforms, 0, &state.alpha, sizeof(float));
 
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu.device, new WGPUCommandEncoderDescriptor{});
+    WGPUCommandEncoder encoder = wgpu.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
       .colorAttachments = new WGPURenderPassColorAttachment{
-        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-        .view = view,
-        .loadOp = WGPULoadOp_Clear,
-        .storeOp = WGPUStoreOp_Store,
-        .clearValue = WGPUColor{ 0., 0., 0., 1. },
+      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+      .view = view,
+      .loadOp = WGPULoadOp_Clear,
+      .storeOp = WGPUStoreOp_Store,
+      .clearValue = WGPUColor{ 0., 0., 0., 1. },
       }
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
@@ -211,7 +208,7 @@ public:
     wgpuRenderPassEncoderRelease(pass);
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
     wgpuCommandEncoderRelease(encoder);
-    wgpuQueueSubmit(wgpu.queue, 1, &command);
+    wgpu.queueSubmit(1, &command);
     wgpuCommandBufferRelease(command);
 
     ImGui_ImplWGPU_NewFrame();
