@@ -47,9 +47,11 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) ve
 	return vec4f(p, 0.0, 1.0);
 }
 
+@group(0) @binding(0) var<uniform> uAlpha: f32;
+
 @fragment
 fn fs_main() -> @location(0) vec4f {
-	return vec4f(1.0, 0.4, 1.0, 1.0);
+	return vec4f(1., .4, 1., uAlpha);
 }
 )";
 
@@ -162,11 +164,14 @@ struct AppState {
     WGPUSurface surface;
     WGPUQueue queue;
     WGPURenderPipeline pipeline;
+    WGPUBindGroup bindGroup;
+    WGPUBuffer uniforms;
   };
   WGPU wgpu;
 
   struct State {
-    bool show_demo = true;
+    bool show_demo = false;
+    float alpha = .5;
   };
   State state;
 };
@@ -177,9 +182,8 @@ SDL_AppResult SDL_Fail() {
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-  if (not SDL_Init(SDL_INIT_VIDEO)) return SDL_Fail();
-
   SDL_SetLogOutputFunction(LogOutputFunction, NULL);
+  if (not SDL_Init(SDL_INIT_VIDEO)) return SDL_Fail();
 
   SDL_Window* window = SDL_CreateWindow("Window", 1280, 720, SDL_WINDOW_HIGH_PIXEL_DENSITY);
   if (not window) return SDL_Fail();
@@ -197,7 +201,47 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   configureSurface(window, surface, device, surfaceFormat);
 
   WGPUShaderModule shaderModule = createShaderModule(device, shaderSource);
+
+
+  WGPUBuffer uniforms = wgpuDeviceCreateBuffer(device, new WGPUBufferDescriptor{
+    .size = 4 * sizeof(float),
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+    .mappedAtCreation = false,
+    });
+
+  WGPUBindGroupLayoutEntry bindingLayout = {
+    .buffer = {
+      .type = WGPUBufferBindingType_Uniform,
+      .minBindingSize = 4 * sizeof(float),
+      .hasDynamicOffset = false,
+    },
+    .sampler = {
+      .type = WGPUSamplerBindingType_Undefined,
+    },
+    .storageTexture = {
+      .access = WGPUStorageTextureAccess_Undefined,
+      .format = WGPUTextureFormat_Undefined,
+      .viewDimension = WGPUTextureViewDimension_Undefined,
+    },
+    .texture = {
+      .multisampled = false,
+      .sampleType = WGPUTextureSampleType_Undefined,
+      .viewDimension = WGPUTextureViewDimension_Undefined
+    },
+    .binding = 0,
+    .visibility = WGPUShaderStage_Fragment,
+  };
+
+  WGPUBindGroupLayout bindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, new WGPUBindGroupLayoutDescriptor{
+    .entryCount = 1,
+    .entries = &bindingLayout,
+    });
+
   WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline(device, new WGPURenderPipelineDescriptor{
+    .layout = wgpuDeviceCreatePipelineLayout(device, new WGPUPipelineLayoutDescriptor{
+      .bindGroupLayoutCount = 1,
+      .bindGroupLayouts = &bindGroupLayout,
+      }),
     .vertex = {
       .bufferCount = 0,
       .module = shaderModule,
@@ -240,6 +284,17 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     });
   wgpuShaderModuleRelease(shaderModule);
 
+  WGPUBindGroup bindGroup = wgpuDeviceCreateBindGroup(device, new WGPUBindGroupDescriptor{
+  .layout = bindGroupLayout,
+  .entryCount = 1,
+  .entries = new WGPUBindGroupEntry{
+    .binding = 0,
+    .buffer = uniforms,
+    .offset = 0,
+    .size = 4 * sizeof(float),
+    },
+    });
+
   *appstate = new AppState{
     .window = window,
     .wgpu = {
@@ -247,11 +302,9 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
       .surface = surface,
       .queue = wgpuDeviceGetQueue(device),
       .pipeline = pipeline,
+      .bindGroup = bindGroup,
+      .uniforms = uniforms,
     }
-    // .device = device,
-    // .surface = surface,
-    // .queue = wgpuDeviceGetQueue(device),
-    // .pipeline = pipeline,
   };
   if (not ImGui_init(window, device, surfaceFormat)) return SDL_Fail();
 
@@ -291,6 +344,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     });
 
   // image
+  wgpuQueueWriteBuffer(wgpu.queue, wgpu.uniforms, 0, &state->alpha, sizeof(float));
   WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu.device, new WGPUCommandEncoderDescriptor{});
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
@@ -303,6 +357,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     }
     });
   wgpuRenderPassEncoderSetPipeline(pass, wgpu.pipeline);
+  wgpuRenderPassEncoderSetBindGroup(pass, 0, wgpu.bindGroup, 0, nullptr);
   wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
   wgpuRenderPassEncoderEnd(pass);
   wgpuRenderPassEncoderRelease(pass);
@@ -321,6 +376,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     ImGui::Begin("Controls");
 
     ImGui::Checkbox("Demo Window", &state->show_demo);
+    ImGui::SliderFloat("alpha", &state->alpha, 0.0f, 1.0f);
 
     ImGui::End();
   }
