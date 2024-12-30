@@ -1,7 +1,4 @@
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_log.h>
-#include <iostream>
 #include "wgpu.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
