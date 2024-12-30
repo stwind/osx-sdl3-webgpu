@@ -1,3 +1,5 @@
+include(FetchContent)
+
 # https://github.com/eliemichel/WebGPU-distribution/blob/main/webgpu.cmake
 macro(FetchContent_DeclareShallowGit Name GIT_REPOSITORY GitRepository GIT_TAG GitTag)
 	FetchContent_Declare(

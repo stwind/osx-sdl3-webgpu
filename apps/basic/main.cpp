@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_log.h>
 #include <cmath>
 #include <iostream>
 #include <webgpu.h>
@@ -11,6 +12,26 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_wgpu.h"
+
+void LogOutputFunction(void* userdata, int category, SDL_LogPriority priority, const char* message) {
+  const char* priority_name = NULL;
+
+  switch (priority) {
+  case SDL_LOG_PRIORITY_VERBOSE: priority_name = "VERBOSE"; break;
+  case SDL_LOG_PRIORITY_DEBUG: priority_name = "DEBUG"; break;
+  case SDL_LOG_PRIORITY_INFO: priority_name = "INFO"; break;
+  case SDL_LOG_PRIORITY_WARN: priority_name = "WARN"; break;
+  case SDL_LOG_PRIORITY_ERROR: priority_name = "ERROR"; break;
+  case SDL_LOG_PRIORITY_CRITICAL: priority_name = "CRITICAL"; break;
+  default: priority_name = "UNKNOWN"; break;
+  }
+
+  char time_buffer[9];
+  time_t now = time(NULL);
+  strftime(time_buffer, sizeof(time_buffer), "%H:%M:%S", localtime(&now));
+
+  fprintf(stderr, "%s [%s]: %s\n", time_buffer, priority_name, message);
+}
 
 const char* shaderSource = R"(
 @vertex
@@ -150,6 +171,8 @@ SDL_AppResult SDL_Fail() {
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   if (not SDL_Init(SDL_INIT_VIDEO)) return SDL_Fail();
 
+  SDL_SetLogOutputFunction(LogOutputFunction, NULL);
+
   SDL_Window* window = SDL_CreateWindow("Window", 1280, 720, SDL_WINDOW_HIGH_PIXEL_DENSITY);
   if (not window) return SDL_Fail();
 
@@ -260,7 +283,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
       .view = view,
       .loadOp = WGPULoadOp_Clear,
       .storeOp = WGPUStoreOp_Store,
-      .clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 },
+      .clearValue = WGPUColor{ 0., 0., 0., 1. },
     }
     });
   wgpuRenderPassEncoderSetPipeline(pass, app->pipeline);
