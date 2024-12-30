@@ -46,12 +46,14 @@ void ImGui_render(WGPU* wgpu, WGPUTextureView view) {
   WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu->device, new WGPUCommandEncoderDescriptor{});
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
-    .colorAttachments = new WGPURenderPassColorAttachment{
-      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-      .loadOp = WGPULoadOp_Load,
-      .storeOp = WGPUStoreOp_Store,
-      .view = view,
-      },
+    .colorAttachments = new WGPURenderPassColorAttachment[1]{
+      {
+        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+        .loadOp = WGPULoadOp_Load,
+        .storeOp = WGPUStoreOp_Store,
+        .view = view,
+      }
+    },
     });
   ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
   wgpuRenderPassEncoderEnd(pass);
@@ -191,24 +193,14 @@ public:
   }
 
   ~Application() {
+    wgpuBufferRelease(vertexBuffer);
     wgpuRenderPipelineRelease(pipeline);
     wgpuBufferRelease(uniforms);
     wgpuBindGroupRelease(bindGroup);
   }
 
   void render() {
-    WGPUSurfaceTexture surfaceTexture;
-    wgpuSurfaceGetCurrentTexture(wgpu.surface, &surfaceTexture);
-
-    WGPUTextureView view = wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
-      .format = wgpuTextureGetFormat(surfaceTexture.texture),
-      .dimension = WGPUTextureViewDimension_2D,
-      .baseMipLevel = 0,
-      .mipLevelCount = 1,
-      .baseArrayLayer = 0,
-      .arrayLayerCount = 1,
-      .aspect = WGPUTextureAspect_All,
-      });
+    WGPUTextureView view = wgpu.SurfaceTextureCreateView();
 
     wgpuQueueWriteBuffer(wgpu.queue, uniforms, 0, &state.alpha, sizeof(float));
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(wgpu.device, new WGPUCommandEncoderDescriptor{});
@@ -249,9 +241,8 @@ public:
 
     ImGui_render(&wgpu, view);
 
-    wgpuTextureViewRelease(view);
     wgpu.present();
-    wgpuTextureRelease(surfaceTexture.texture);
+    wgpu.SurfaceTextureViewRelease(view);
   }
 };
 
