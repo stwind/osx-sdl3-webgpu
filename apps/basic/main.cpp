@@ -6,16 +6,8 @@
 
 const char* shaderSource = R"(
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
-	var p = vec2f(0.0, 0.0);
-	if (in_vertex_index == 0u) {
-		p = vec2f(-0.5, -0.5);
-	} else if (in_vertex_index == 1u) {
-		p = vec2f(0.5, -0.5);
-	} else {
-		p = vec2f(0.0, 0.5);
-	}
-	return vec4f(p, 0.0, 1.0);
+fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
+	return vec4f(position, 0, 1);
 }
 
 @group(0) @binding(0) var<uniform> uAlpha: f32;
@@ -80,6 +72,7 @@ public:
   WGPURenderPipeline pipeline;
   WGPUBuffer uniforms;
   WGPUBindGroup bindGroup;
+  WGPUBuffer vertexBuffer;
 
   struct {
     bool show_demo = false;
@@ -87,6 +80,17 @@ public:
   } state;
 
   Application() {
+    std::vector<float> vertexData = { -0.5, -0.5, +0.5, -0.5, 0., .5 };
+    auto vertexCount = static_cast<uint32_t>(vertexData.size() / 2);
+
+    WGPUBufferDescriptor bufferDesc = {
+      .size = vertexData.size() * sizeof(float),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+    };
+
+    vertexBuffer = wgpuDeviceCreateBuffer(wgpu.device, &bufferDesc);
+    wgpuQueueWriteBuffer(wgpu.queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+
     WGPUShaderModule shaderModule = createShaderModule(wgpu.device, shaderSource);
     pipeline = wgpuDeviceCreateRenderPipeline(wgpu.device, new WGPURenderPipelineDescriptor{
       .layout = wgpuDeviceCreatePipelineLayout(wgpu.device, new WGPUPipelineLayoutDescriptor{
@@ -106,7 +110,17 @@ public:
           }
         }),
       .vertex = {
-        .bufferCount = 0,
+        .bufferCount = 1,
+        .buffers = new WGPUVertexBufferLayout[1]{
+          {
+            .attributeCount = 1,
+            .attributes = new WGPUVertexAttribute[1]{
+              {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x2, .offset = 0 }
+              },
+            .arrayStride = 2 * sizeof(float),
+            .stepMode = WGPUVertexStepMode_Vertex
+          }
+        },
         .module = shaderModule,
         .entryPoint = "vs_main",
         .constantCount = 0,
@@ -199,6 +213,7 @@ public:
       }
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
+    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer, 0, wgpuBufferGetSize(vertexBuffer));
     wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
     wgpuRenderPassEncoderEnd(pass);
