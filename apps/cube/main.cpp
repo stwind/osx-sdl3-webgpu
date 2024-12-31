@@ -1,5 +1,6 @@
 #include <SDL3/SDL.h>
 #include "wgpu.hpp"
+#include "imgui.hpp"
 
 const char* shaderSource = R"(
 struct Camera {
@@ -130,6 +131,8 @@ public:
     });
 
   Application() {
+    if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
+
     vertexBuffer.write(vertexData.data());
     indexBuffer.write(indexData.data());
 
@@ -208,6 +211,13 @@ public:
 
   ~Application() {
     wgpuRenderPipelineRelease(pipeline);
+    ImGui_ImplWGPU_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+  }
+
+  void processEvent(const SDL_Event* event) {
+    ImGui_ImplSDL3_ProcessEvent(event);
   }
 
   void render() {
@@ -238,6 +248,24 @@ public:
     ctx.queueSubmit(1, &command);
     wgpuCommandBufferRelease(command);
 
+    ImGuiIO& io = ImGui::GetIO();
+
+    ImGui_ImplWGPU_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+    {
+      ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
+      ImGui::SetNextWindowSize(ImVec2(200, 0), ImGuiCond_Once);
+      ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+
+      if (ImGui::IsMousePosValid())
+        ImGui::Text("Mouse pos: (%g, %g)", io.MousePos.x, io.MousePos.y);
+
+      ImGui::End();
+    }
+    ImGui::Render();
+    ImGui_render(&ctx, view);
+
     ctx.present();
     ctx.surfaceTextureViewRelease(view);
   }
@@ -249,6 +277,7 @@ int main(int argc, char** argv) try {
   SDL_Event event;
   for (bool running = true; running;) {
     while (SDL_PollEvent(&event)) {
+      app.processEvent(&event);
       if (event.type == SDL_EVENT_QUIT) running = false;
     }
 
