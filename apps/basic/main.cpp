@@ -71,10 +71,28 @@ class Application {
 public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
   WGPURenderPipeline pipeline;
-  WGPUBuffer uniforms;
-  WGPUBindGroup bindGroup;
 
   WGPU::Buffer vertexBuffer;
+
+  WGPU::Buffer uniforms = WGPU::Buffer(&ctx, {
+    .label = "params",
+    .size = 4 * sizeof(float),
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+    .mappedAtCreation = false,
+    });
+  WGPU::BindGroup bindGroup = WGPU::BindGroup(&ctx, "params", {
+    {
+      .binding = 0,
+      .buffer = &uniforms,
+      .offset = 0,
+      .visibility = WGPUShaderStage_Fragment,
+      .layout = {
+        .type = WGPUBufferBindingType_Uniform,
+        .hasDynamicOffset = false,
+        .minBindingSize = uniforms.size,
+      }
+    }
+    });
 
   struct {
     bool show_demo = false;
@@ -91,19 +109,7 @@ public:
     pipeline = ctx.createRenderPipeline(new WGPURenderPipelineDescriptor{
       .layout = ctx.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,
-        .bindGroupLayouts = new WGPUBindGroupLayout[1]{
-          ctx.createBindGroupLayout(new WGPUBindGroupLayoutDescriptor{
-            .entryCount = 1,
-            .entries = new WGPUBindGroupLayoutEntry{
-              .binding = 0,
-              .visibility = WGPUShaderStage_Fragment,
-              .buffer = {
-                .type = WGPUBufferBindingType_Uniform,
-                .minBindingSize = 4 * sizeof(float),
-              },
-              },
-            })
-          }
+        .bindGroupLayouts = new WGPUBindGroupLayout[1]{ bindGroup.layout }
         }),
       .vertex = {
         .bufferCount = 1,
@@ -158,35 +164,17 @@ public:
       });
     wgpuShaderModuleRelease(shaderModule);
 
-    uniforms = ctx.createBuffer(new WGPUBufferDescriptor{
-      .size = 4 * sizeof(float),
-      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-      .mappedAtCreation = false,
-      });
-    bindGroup = ctx.createBindGroup(new WGPUBindGroupDescriptor{
-      .layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0),
-      .entryCount = 1,
-      .entries = new WGPUBindGroupEntry{
-        .binding = 0,
-        .buffer = uniforms,
-        .offset = 0,
-        .size = 4 * sizeof(float),
-        },
-      });
-
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
   }
 
   ~Application() {
     wgpuRenderPipelineRelease(pipeline);
-    wgpuBufferRelease(uniforms);
-    wgpuBindGroupRelease(bindGroup);
   }
 
   void render() {
     WGPUTextureView view = ctx.surfaceTextureCreateView();
 
-    ctx.writeBuffer(uniforms, 0, &state.alpha, sizeof(float));
+    uniforms.write(&state.alpha);
 
     WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
@@ -201,7 +189,7 @@ public:
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
     wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
-    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, nullptr);
+    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
