@@ -203,4 +203,24 @@ namespace WGPU {
   private:
     Context* ctx;
   };
+
+  class BindGroup {
+  public:
+    WGPUBindGroup bindGroup;
+    WGPUBindGroupLayout layout;
+    WGPUBindGroupLayoutDescriptor layoutSpec;
+
+    BindGroup(Context* ctx, WGPUBindGroupLayoutDescriptor layoutSpec, size_t entryCount, const WGPUBindGroupEntry* entries)
+      : layoutSpec(layoutSpec), layout(ctx->createBindGroupLayout(&layoutSpec)) {
+      bindGroup = ctx->createBindGroup(new WGPUBindGroupDescriptor{
+        .label = layoutSpec.label,
+        .layout = layout,
+        .entryCount = entryCount,
+        .entries = entries
+        });
+    }
+
+  private:
+    Context* ctx;
+  };
 }

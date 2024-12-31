@@ -100,20 +100,46 @@ class Application {
 public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
   WGPURenderPipeline pipeline;
-  WGPUBuffer uniforms;
-  WGPUBindGroup bindGroup;
-  WGPU::Buffer vertexBuffer;
-  WGPU::Buffer indexBuffer;
 
-  Application()
-    : vertexBuffer(&ctx, WGPUBufferDescriptor{
-        .size = vertexData.size() * sizeof(float),
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-      }),
-      indexBuffer(&ctx, WGPUBufferDescriptor{
-        .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-        }) {
+  WGPU::Buffer vertexBuffer = WGPU::Buffer(&ctx, {
+    .size = vertexData.size() * sizeof(float),
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+    });
+  WGPU::Buffer indexBuffer = WGPU::Buffer(&ctx, {
+    .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
+    });
+  WGPU::Buffer uniforms = WGPU::Buffer(&ctx, {
+    .label = "camera",
+    .size = sizeof(CameraUniform),
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+    .mappedAtCreation = false,
+    });
+
+  WGPU::BindGroup bindGroup = WGPU::BindGroup(&ctx, {
+    .label = "camera",
+    .entryCount = 1,
+    .entries = new WGPUBindGroupLayoutEntry[1]{
+      {
+        .binding = 0,
+        .visibility = WGPUShaderStage_Vertex,
+        .buffer = {
+          .type = WGPUBufferBindingType_Uniform,
+          .hasDynamicOffset = false,
+          .minBindingSize = sizeof(CameraUniform),
+        },
+      }
+    },
+    }, 1, new WGPUBindGroupEntry[1]{
+      {
+        .binding = 0,
+        .buffer = uniforms.buf,
+        .offset = 0,
+        .size = sizeof(CameraUniform),
+      }
+    });
+
+  Application() {
     vertexBuffer.write(vertexData.data());
     indexBuffer.write(indexData.data());
 
@@ -122,19 +148,7 @@ public:
       .layout = ctx.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,
         .bindGroupLayouts = new WGPUBindGroupLayout[1]{
-          ctx.createBindGroupLayout(new WGPUBindGroupLayoutDescriptor{
-            .label = "camera",
-            .entryCount = 1,
-            .entries = new WGPUBindGroupLayoutEntry{
-              .binding = 0,
-              .visibility = WGPUShaderStage_Vertex,
-              .buffer = {
-                .type = WGPUBufferBindingType_Uniform,
-                .hasDynamicOffset = false,
-                .minBindingSize = sizeof(CameraUniform),
-              },
-              },
-          })
+          bindGroup.layout
         }
       }),
       .vertex = {
@@ -165,21 +179,23 @@ public:
         .entryPoint = "fs_main",
         .constantCount = 0,
         .targetCount = 1,
-        .targets = new WGPUColorTargetState{
-          .format = ctx.surfaceFormat,
-          .blend = new WGPUBlendState{
-            .color = {
-              .srcFactor = WGPUBlendFactor_SrcAlpha,
-              .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-              .operation = WGPUBlendOperation_Add
+        .targets = new WGPUColorTargetState[1]{
+          {
+            .format = ctx.surfaceFormat,
+            .blend = new WGPUBlendState{
+              .color = {
+                .srcFactor = WGPUBlendFactor_SrcAlpha,
+                .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+                .operation = WGPUBlendOperation_Add
+              },
+              .alpha = {
+                .srcFactor = WGPUBlendFactor_Zero,
+                .dstFactor = WGPUBlendFactor_One,
+                .operation = WGPUBlendOperation_Add
+              }
             },
-            .alpha = {
-              .srcFactor = WGPUBlendFactor_Zero,
-              .dstFactor = WGPUBlendFactor_One,
-              .operation = WGPUBlendOperation_Add
-            }
-          },
-          .writeMask = WGPUColorWriteMask_All
+            .writeMask = WGPUColorWriteMask_All
+          }
         }
       },
       .multisample = {
@@ -190,23 +206,6 @@ public:
       });
     wgpuShaderModuleRelease(shaderModule);
 
-    uniforms = ctx.createBuffer(new WGPUBufferDescriptor{
-      .label = "camera",
-      .size = sizeof(CameraUniform),
-      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-      .mappedAtCreation = false,
-      });
-    bindGroup = ctx.createBindGroup(new WGPUBindGroupDescriptor{
-      .layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0),
-      .entryCount = 1,
-      .entries = new WGPUBindGroupEntry{
-        .binding = 0,
-        .buffer = uniforms,
-        .offset = 0,
-        .size = sizeof(CameraUniform),
-        },
-      });
-
     CameraUniform uniformData{
       .view = std::array<float, 16>{
         1,0,0,0,
@@ -216,13 +215,11 @@ public:
       },
       .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
     };
-    ctx.writeBuffer(uniforms, 0, &uniformData, sizeof(CameraUniform));
+    uniforms.write(&uniformData);
   }
 
   ~Application() {
     wgpuRenderPipelineRelease(pipeline);
-    wgpuBufferRelease(uniforms);
-    wgpuBindGroupRelease(bindGroup);
   }
 
   void render() {
@@ -242,7 +239,7 @@ public:
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
     wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
     wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, wgpuBufferGetSize(indexBuffer.buf));
-    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, nullptr);
+    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
