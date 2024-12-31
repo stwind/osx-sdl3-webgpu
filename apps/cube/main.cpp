@@ -115,29 +115,19 @@ public:
     .mappedAtCreation = false,
     });
 
-  WGPU::BindGroup bindGroup = WGPU::BindGroup(&ctx, {
-    .label = "camera",
-    .entryCount = 1,
-    .entries = new WGPUBindGroupLayoutEntry[1]{
-      {
-        .binding = 0,
-        .visibility = WGPUShaderStage_Vertex,
-        .buffer = {
-          .type = WGPUBufferBindingType_Uniform,
-          .hasDynamicOffset = false,
-          .minBindingSize = sizeof(CameraUniform),
-        },
-      }
-    },
-    }, {
-      {
-        .binding = 0,
-        .buffer = uniforms.buf,
-        .offset = 0,
-        .size = uniforms.size
+  WGPU::BindGroup bindGroup = WGPU::BindGroup(&ctx, "camera", {
+    {
+      .binding = 0,
+      .buffer = &uniforms,
+      .offset = 0,
+      .visibility = WGPUShaderStage_Vertex,
+      .layout = {
+        .type = WGPUBufferBindingType_Uniform,
+        .hasDynamicOffset = false,
+        .minBindingSize = uniforms.size,
       }
     }
-  );
+    });
 
   Application() {
     vertexBuffer.write(vertexData.data());

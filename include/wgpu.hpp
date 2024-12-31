@@ -205,6 +205,17 @@ namespace WGPU {
     }
   };
 
+  struct BindGroupEntry {
+    uint32_t binding;
+    Buffer* buffer;
+    uint64_t offset;
+    WGPUShaderStageFlags visibility;
+    WGPUBufferBindingLayout layout;
+    WGPUSamplerBindingLayout sampler;
+    WGPUTextureBindingLayout texture;
+    WGPUStorageTextureBindingLayout storageTexture;
+  };
+
   class BindGroup {
   private:
     Context* ctx;
@@ -214,14 +225,43 @@ namespace WGPU {
     WGPUBindGroupLayout layout;
     WGPUBindGroupLayoutDescriptor layoutSpec;
 
-    BindGroup(Context* ctx, WGPUBindGroupLayoutDescriptor layoutSpec, const std::vector<WGPUBindGroupEntry>& entries)
-      : layoutSpec(layoutSpec), layout(ctx->createBindGroupLayout(&layoutSpec)) {
+    BindGroup(Context* ctx, const char* label, const std::vector<BindGroupEntry>& entries) {
+      size_t n = entries.size();
+
+      WGPUBindGroupLayoutEntry* layoutEntries = new WGPUBindGroupLayoutEntry[n];
+      for (int i = 0; i < n; i++) layoutEntries[i] = WGPUBindGroupLayoutEntry{
+        .binding = entries[i].binding,
+        .visibility = entries[i].visibility,
+        .buffer = entries[i].layout,
+        .sampler = entries[i].sampler,
+        .texture = entries[i].texture,
+        .storageTexture = entries[i].storageTexture,
+      };
+
+      layoutSpec = WGPUBindGroupLayoutDescriptor{
+        .label = label,
+        .entryCount = n,
+        .entries = layoutEntries
+      };
+      layout = ctx->createBindGroupLayout(&layoutSpec);
+
+      WGPUBindGroupEntry* bindGroupEntries = new WGPUBindGroupEntry[n];
+      for (int i = 0; i < n; i++) bindGroupEntries[i] = WGPUBindGroupEntry{
+        .binding = entries[i].binding,
+        .buffer = entries[i].buffer->buf,
+        .offset = entries[i].offset,
+        .size = entries[i].buffer->size
+      };
+
       bindGroup = ctx->createBindGroup(new WGPUBindGroupDescriptor{
         .label = layoutSpec.label,
         .layout = layout,
-        .entryCount = entries.size(),
-        .entries = entries.data()
+        .entryCount = n,
+        .entries = bindGroupEntries
         });
+
+      delete[] layoutEntries;
+      delete[] bindGroupEntries;
     }
 
     ~BindGroup() {
