@@ -53,76 +53,76 @@ std::array<float, 16> perspective(float fov, float aspect, float near, float far
   return mat;
 };
 
+float s = .5;
+std::vector<float> vertexData{
+  s, s, -s, 1, 0, 0,
+  s, s, s, 1, 0, 0,
+  s, -s, s, 1, 0, 0,
+  s, -s, -s, 1, 0, 0,
+  -s, s, s, -1, 0, 0,
+  -s, s, -s, -1, 0, 0,
+  -s, -s, -s, -1, 0, 0,
+  -s, -s, s, -1, 0, 0,
+  -s, s, s, 0, 1, 0,
+  s, s, s, 0, 1, 0,
+  s, s, -s, 0, 1, 0,
+  -s, s, -s, 0, 1, 0,
+  -s, -s, -s, 0, -1, 0,
+  s, -s, -s, 0, -1, 0,
+  s, -s, s, 0, -1, 0,
+  -s, -s, s, 0, -1, 0,
+  s, s, s, 0, 0, 1,
+  -s, s, s, 0, 0, 1,
+  -s, -s, s, 0, 0, 1,
+  s, -s, s, 0, 0, 1,
+  -s, s, -s, 0, 0, -1,
+  s, s, -s, 0, 0, -1,
+  s, -s, -s, 0, 0, -1,
+  -s, -s, -s, 0, 0, -1,
+};
+
+std::vector<uint16_t> indexData{
+  0, 1, 2,
+  0, 2, 3,
+  4, 5, 6,
+  4, 6, 7,
+  8, 9, 10,
+  8, 10, 11,
+  12, 13, 14,
+  12, 14, 15,
+  16, 17, 18,
+  16, 18, 19,
+  20, 21, 22,
+  20, 22, 23
+};
+
 class Application {
 public:
-  WGPU wgpu = WGPU(1280, 720);
+  WGPU::Context ctx = WGPU::Context(1280, 720);
   WGPURenderPipeline pipeline;
-  WGPUBuffer vertexBuffer;
-  WGPUBuffer indexBuffer;
   WGPUBuffer uniforms;
   WGPUBindGroup bindGroup;
+  WGPU::Buffer vertexBuffer;
+  WGPU::Buffer indexBuffer;
 
-  Application() {
-    float s = .5;
-    std::vector<float> vertexData{
-      s, s, -s, 1, 0, 0,
-      s, s, s, 1, 0, 0,
-      s, -s, s, 1, 0, 0,
-      s, -s, -s, 1, 0, 0,
-      -s, s, s, -1, 0, 0,
-      -s, s, -s, -1, 0, 0,
-      -s, -s, -s, -1, 0, 0,
-      -s, -s, s, -1, 0, 0,
-      -s, s, s, 0, 1, 0,
-      s, s, s, 0, 1, 0,
-      s, s, -s, 0, 1, 0,
-      -s, s, -s, 0, 1, 0,
-      -s, -s, -s, 0, -1, 0,
-      s, -s, -s, 0, -1, 0,
-      s, -s, s, 0, -1, 0,
-      -s, -s, s, 0, -1, 0,
-      s, s, s, 0, 0, 1,
-      -s, s, s, 0, 0, 1,
-      -s, -s, s, 0, 0, 1,
-      s, -s, s, 0, 0, 1,
-      -s, s, -s, 0, 0, -1,
-      s, s, -s, 0, 0, -1,
-      s, -s, -s, 0, 0, -1,
-      -s, -s, -s, 0, 0, -1,
-    };
-    WGPUBufferDescriptor bufferDesc = {
-      .size = vertexData.size() * sizeof(float),
-      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-    };
-    vertexBuffer = wgpu.createBuffer(&bufferDesc);
-    wgpu.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+  Application()
+    : vertexBuffer(&ctx, WGPUBufferDescriptor{
+        .size = vertexData.size() * sizeof(float),
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+      }),
+      indexBuffer(&ctx, WGPUBufferDescriptor{
+        .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
+        }) {
+    vertexBuffer.write(vertexData.data());
+    indexBuffer.write(indexData.data());
 
-    std::vector<uint16_t> indexData{
-      0, 1, 2,
-      0, 2, 3,
-      4, 5, 6,
-      4, 6, 7,
-      8, 9, 10,
-      8, 10, 11,
-      12, 13, 14,
-      12, 14, 15,
-      16, 17, 18,
-      16, 18, 19,
-      20, 21, 22,
-      20, 22, 23
-    };
-
-    bufferDesc.size = (indexData.size() * sizeof(uint16_t) + 3) & ~3; // round up to the next multiple of 4
-    bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;;
-    indexBuffer = wgpu.createBuffer(&bufferDesc);
-    wgpu.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
-
-    WGPUShaderModule shaderModule = wgpu.createShaderModule(shaderSource);
-    pipeline = wgpu.createRenderPipeline(new WGPURenderPipelineDescriptor{
-      .layout = wgpu.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
+    WGPUShaderModule shaderModule = ctx.createShaderModule(shaderSource);
+    pipeline = ctx.createRenderPipeline(new WGPURenderPipelineDescriptor{
+      .layout = ctx.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,
         .bindGroupLayouts = new WGPUBindGroupLayout[1]{
-          wgpu.createBindGroupLayout(new WGPUBindGroupLayoutDescriptor{
+          ctx.createBindGroupLayout(new WGPUBindGroupLayoutDescriptor{
             .label = "camera",
             .entryCount = 1,
             .entries = new WGPUBindGroupLayoutEntry{
@@ -166,7 +166,7 @@ public:
         .constantCount = 0,
         .targetCount = 1,
         .targets = new WGPUColorTargetState{
-          .format = wgpu.surfaceFormat,
+          .format = ctx.surfaceFormat,
           .blend = new WGPUBlendState{
             .color = {
               .srcFactor = WGPUBlendFactor_SrcAlpha,
@@ -190,13 +190,13 @@ public:
       });
     wgpuShaderModuleRelease(shaderModule);
 
-    uniforms = wgpu.createBuffer(new WGPUBufferDescriptor{
+    uniforms = ctx.createBuffer(new WGPUBufferDescriptor{
       .label = "camera",
       .size = sizeof(CameraUniform),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
       });
-    bindGroup = wgpu.createBindGroup(new WGPUBindGroupDescriptor{
+    bindGroup = ctx.createBindGroup(new WGPUBindGroupDescriptor{
       .layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0),
       .entryCount = 1,
       .entries = new WGPUBindGroupEntry{
@@ -214,21 +214,21 @@ public:
         0,0,1,0,
         0,0,-5,1,
       },
-      .proj = perspective(45 * M_PI / 180, wgpu.aspect,.1,100),
+      .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
     };
-    wgpu.writeBuffer(uniforms, 0, &uniformData, sizeof(CameraUniform));
+    ctx.writeBuffer(uniforms, 0, &uniformData, sizeof(CameraUniform));
   }
 
   ~Application() {
     wgpuRenderPipelineRelease(pipeline);
-    wgpuBufferRelease(vertexBuffer);
-    wgpuBufferRelease(indexBuffer);
+    wgpuBufferRelease(uniforms);
+    wgpuBindGroupRelease(bindGroup);
   }
 
   void render() {
-    WGPUTextureView view = wgpu.surfaceTextureCreateView();
+    WGPUTextureView view = ctx.surfaceTextureCreateView();
 
-    WGPUCommandEncoder encoder = wgpu.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
+    WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
       .colorAttachments = new WGPURenderPassColorAttachment{
@@ -240,19 +240,19 @@ public:
       }
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer, 0, wgpuBufferGetSize(vertexBuffer));
-    wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer, WGPUIndexFormat_Uint16, 0, wgpuBufferGetSize(indexBuffer));
+    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
+    wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, wgpuBufferGetSize(indexBuffer.buf));
     wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
     wgpuCommandEncoderRelease(encoder);
-    wgpu.queueSubmit(1, &command);
+    ctx.queueSubmit(1, &command);
     wgpuCommandBufferRelease(command);
 
-    wgpu.present();
-    wgpu.surfaceTextureViewRelease(view);
+    ctx.present();
+    ctx.surfaceTextureViewRelease(view);
   }
 };
 

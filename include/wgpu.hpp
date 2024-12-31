@@ -77,107 +77,130 @@ void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device
     });
 }
 
-class WGPU {
-public:
-  SDL_Window* window;
-  WGPUSurface surface;
-  WGPUDevice device;
-  WGPUQueue queue;
-  WGPUSurfaceTexture surfaceTexture;
-  WGPUTextureFormat surfaceFormat;
+namespace WGPU {
+  class Context {
+  public:
+    SDL_Window* window;
+    WGPUSurface surface;
+    WGPUDevice device;
+    WGPUQueue queue;
+    WGPUSurfaceTexture surfaceTexture;
+    WGPUTextureFormat surfaceFormat;
 
-  float aspect;
+    float aspect;
 
-  WGPU(int w, int h, WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb)
-    : surfaceFormat(surfaceFormat), aspect(float(w) / float(h)) {
-    SDL_SetLogOutputFunction(LogOutputFunction, NULL);
-    if (!SDL_Init(SDL_INIT_VIDEO)) throw std::runtime_error("SDL_Init failed");
+    Context(int w, int h, WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb)
+      : surfaceFormat(surfaceFormat), aspect(float(w) / float(h)) {
+      SDL_SetLogOutputFunction(LogOutputFunction, nullptr);
+      if (!SDL_Init(SDL_INIT_VIDEO)) throw std::runtime_error("SDL_Init failed");
 
-    window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_METAL);
-    if (window == nullptr) throw std::runtime_error("SDL_CreateWindow failed");
+      window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_METAL);
+      if (window == nullptr) throw std::runtime_error("SDL_CreateWindow failed");
 
-    WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
-    surface = SDL_GetWGPUSurface(instance, window);
-    WGPUAdapter adapter = requestAdapter(surface, instance);
-    wgpuInstanceRelease(instance);
-    device = requestDevice(adapter);
-    wgpuAdapterRelease(adapter);
-    configureSurface(window, surface, device, surfaceFormat);
-    queue = wgpuDeviceGetQueue(device);
-  }
+      WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
+      surface = SDL_GetWGPUSurface(instance, window);
+      WGPUAdapter adapter = requestAdapter(surface, instance);
+      wgpuInstanceRelease(instance);
+      device = requestDevice(adapter);
+      wgpuAdapterRelease(adapter);
+      configureSurface(window, surface, device, surfaceFormat);
+      queue = wgpuDeviceGetQueue(device);
+    }
 
-  ~WGPU() {
-    wgpuQueueRelease(queue);
-    wgpuDeviceRelease(device);
-    wgpuSurfaceUnconfigure(surface);
-    wgpuSurfaceRelease(surface);
+    ~Context() {
+      wgpuQueueRelease(queue);
+      wgpuDeviceRelease(device);
+      wgpuSurfaceUnconfigure(surface);
+      wgpuSurfaceRelease(surface);
 
-    SDL_DestroyWindow(window);
-  }
+      SDL_DestroyWindow(window);
+    }
 
-  WGPUBuffer createBuffer(const WGPUBufferDescriptor* descripter) {
-    return wgpuDeviceCreateBuffer(device, descripter);
-  }
+    WGPUBuffer createBuffer(const WGPUBufferDescriptor* descripter) {
+      return wgpuDeviceCreateBuffer(device, descripter);
+    }
 
-  void writeBuffer(WGPUBuffer buffer, uint64_t offset, const void* data, size_t size) {
-    wgpuQueueWriteBuffer(queue, buffer, 0, data, size);
-  }
+    void writeBuffer(WGPUBuffer buffer, uint64_t offset, const void* data, size_t size) {
+      wgpuQueueWriteBuffer(queue, buffer, 0, data, size);
+    }
 
-  WGPUShaderModule createShaderModule(const char* source) {
-    WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
-      .code = source,
-      .chain = {
-        .sType = WGPUSType_ShaderModuleWGSLDescriptor
-      }
+    WGPUShaderModule createShaderModule(const char* source) {
+      WGPUShaderModuleWGSLDescriptor shaderCodeDesc = {
+        .code = source,
+        .chain = {
+          .sType = WGPUSType_ShaderModuleWGSLDescriptor
+        }
+      };
+      return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
+        .nextInChain = &shaderCodeDesc.chain
+        });
     };
-    return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
-      .nextInChain = &shaderCodeDesc.chain
-      });
+
+    WGPURenderPipeline createRenderPipeline(const WGPURenderPipelineDescriptor* descripter) {
+      return wgpuDeviceCreateRenderPipeline(device, descripter);
+    }
+
+    WGPUPipelineLayout createPipelineLayout(const WGPUPipelineLayoutDescriptor* descripter) {
+      return wgpuDeviceCreatePipelineLayout(device, descripter);
+    }
+
+    WGPUBindGroup createBindGroup(const WGPUBindGroupDescriptor* descripter) {
+      return wgpuDeviceCreateBindGroup(device, descripter);
+    }
+
+    WGPUBindGroupLayout createBindGroupLayout(const WGPUBindGroupLayoutDescriptor* descripter) {
+      return wgpuDeviceCreateBindGroupLayout(device, descripter);
+    }
+
+    WGPUCommandEncoder createCommandEncoder(const WGPUCommandEncoderDescriptor* descripter) {
+      return wgpuDeviceCreateCommandEncoder(device, descripter);
+    }
+
+    void queueSubmit(size_t count, const WGPUCommandBuffer* commands) {
+      wgpuQueueSubmit(queue, count, commands);
+    }
+
+    WGPUTextureView surfaceTextureCreateView() {
+      wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
+      return wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
+        .format = wgpuTextureGetFormat(surfaceTexture.texture),
+        .dimension = WGPUTextureViewDimension_2D,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .aspect = WGPUTextureAspect_All,
+        });
+    }
+
+    void surfaceTextureViewRelease(WGPUTextureView view) {
+      wgpuTextureViewRelease(view);
+      wgpuTextureRelease(surfaceTexture.texture);
+    }
+
+    void present() {
+      wgpuSurfacePresent(surface);
+    }
   };
 
-  WGPURenderPipeline createRenderPipeline(const WGPURenderPipelineDescriptor* descripter) {
-    return wgpuDeviceCreateRenderPipeline(device, descripter);
-  }
+  class Buffer {
+  public:
+    WGPUBufferDescriptor spec;
+    WGPUBuffer buf;
 
-  WGPUPipelineLayout createPipelineLayout(const WGPUPipelineLayoutDescriptor* descripter) {
-    return wgpuDeviceCreatePipelineLayout(device, descripter);
-  }
+    Buffer(Context* ctx, WGPUBufferDescriptor spec)
+      : ctx(ctx), spec(spec), buf(ctx->createBuffer(&spec)) {
+    }
 
-  WGPUBindGroup createBindGroup(const WGPUBindGroupDescriptor* descripter) {
-    return wgpuDeviceCreateBindGroup(device, descripter);
-  }
+    ~Buffer() {
+      wgpuBufferRelease(buf);
+    }
 
-  WGPUBindGroupLayout createBindGroupLayout(const WGPUBindGroupLayoutDescriptor* descripter) {
-    return wgpuDeviceCreateBindGroupLayout(device, descripter);
-  }
+    void write(const void* data, uint64_t offset = 0) {
+      ctx->writeBuffer(buf, offset, data, spec.size);
+    }
 
-  WGPUCommandEncoder createCommandEncoder(const WGPUCommandEncoderDescriptor* descripter) {
-    return wgpuDeviceCreateCommandEncoder(device, descripter);
-  }
-
-  void queueSubmit(size_t count, const WGPUCommandBuffer* commands) {
-    wgpuQueueSubmit(queue, count, commands);
-  }
-
-  WGPUTextureView surfaceTextureCreateView() {
-    wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
-    return wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
-      .format = wgpuTextureGetFormat(surfaceTexture.texture),
-      .dimension = WGPUTextureViewDimension_2D,
-      .baseMipLevel = 0,
-      .mipLevelCount = 1,
-      .baseArrayLayer = 0,
-      .arrayLayerCount = 1,
-      .aspect = WGPUTextureAspect_All,
-      });
-  }
-
-  void surfaceTextureViewRelease(WGPUTextureView view) {
-    wgpuTextureViewRelease(view);
-    wgpuTextureRelease(surfaceTexture.texture);
-  }
-
-  void present() {
-    wgpuSurfacePresent(surface);
-  }
-};
+  private:
+    Context* ctx;
+  };
+}

@@ -24,23 +24,23 @@ struct VSOutput {
 }
 )";
 
-bool ImGui_init(WGPU* wgpu) {
+bool ImGui_init(WGPU::Context* ctx) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO(); (void)io;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.IniFilename = nullptr;
   ImGui::StyleColorsDark();
-  ImGui_ImplSDL3_InitForOther(wgpu->window);
+  ImGui_ImplSDL3_InitForOther(ctx->window);
 
   ImGui_ImplWGPU_InitInfo init_info;
-  init_info.Device = wgpu->device;
-  init_info.RenderTargetFormat = wgpu->surfaceFormat;
+  init_info.Device = ctx->device;
+  init_info.RenderTargetFormat = ctx->surfaceFormat;
   return ImGui_ImplWGPU_Init(&init_info);
 };
 
-void ImGui_render(WGPU* wgpu, WGPUTextureView view) {
-  WGPUCommandEncoder encoder = wgpu->createCommandEncoder(new WGPUCommandEncoderDescriptor{});
+void ImGui_render(WGPU::Context* ctx, WGPUTextureView view) {
+  WGPUCommandEncoder encoder = ctx->createCommandEncoder(new WGPUCommandEncoderDescriptor{});
   WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
     .colorAttachmentCount = 1,
     .colorAttachments = new WGPURenderPassColorAttachment[1]{
@@ -57,42 +57,42 @@ void ImGui_render(WGPU* wgpu, WGPUTextureView view) {
   wgpuRenderPassEncoderRelease(pass);
   WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
   wgpuCommandEncoderRelease(encoder);
-  wgpu->queueSubmit(1, &command);
+  ctx->queueSubmit(1, &command);
   wgpuCommandBufferRelease(command);
+};
+
+std::vector<float> vertexData = {
+  -0.5, -0.5, 1, 0, 0,
+  +0.5, -0.5, 0, 1, 0,
+  0., .5, 0, 0, 1
 };
 
 class Application {
 public:
-  WGPU wgpu = WGPU(1280, 720);
+  WGPU::Context ctx = WGPU::Context(1280, 720);
   WGPURenderPipeline pipeline;
   WGPUBuffer uniforms;
   WGPUBindGroup bindGroup;
-  WGPUBuffer vertexBuffer;
+
+  WGPU::Buffer vertexBuffer;
 
   struct {
     bool show_demo = false;
     float alpha = .5;
   } state;
 
-  Application() {
-    std::vector<float> vertexData = {
-      -0.5, -0.5, 1, 0, 0,
-      +0.5, -0.5, 0, 1, 0,
-      0., .5, 0, 0, 1
-    };
-    WGPUBufferDescriptor bufferDesc = {
+  Application() : vertexBuffer(&ctx, {
       .size = vertexData.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-    };
-    vertexBuffer = wgpu.createBuffer(&bufferDesc);
-    wgpu.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+    }) {
+    vertexBuffer.write(vertexData.data());
 
-    WGPUShaderModule shaderModule = wgpu.createShaderModule(shaderSource);
-    pipeline = wgpu.createRenderPipeline(new WGPURenderPipelineDescriptor{
-      .layout = wgpu.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
+    WGPUShaderModule shaderModule = ctx.createShaderModule(shaderSource);
+    pipeline = ctx.createRenderPipeline(new WGPURenderPipelineDescriptor{
+      .layout = ctx.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,
         .bindGroupLayouts = new WGPUBindGroupLayout[1]{
-          wgpu.createBindGroupLayout(new WGPUBindGroupLayoutDescriptor{
+          ctx.createBindGroupLayout(new WGPUBindGroupLayoutDescriptor{
             .entryCount = 1,
             .entries = new WGPUBindGroupLayoutEntry{
               .binding = 0,
@@ -134,7 +134,7 @@ public:
         .constantCount = 0,
         .targetCount = 1,
         .targets = new WGPUColorTargetState{
-          .format = wgpu.surfaceFormat,
+          .format = ctx.surfaceFormat,
           .blend = new WGPUBlendState{
             .color = {
               .srcFactor = WGPUBlendFactor_SrcAlpha,
@@ -158,12 +158,12 @@ public:
       });
     wgpuShaderModuleRelease(shaderModule);
 
-    uniforms = wgpu.createBuffer(new WGPUBufferDescriptor{
+    uniforms = ctx.createBuffer(new WGPUBufferDescriptor{
       .size = 4 * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
       });
-    bindGroup = wgpu.createBindGroup(new WGPUBindGroupDescriptor{
+    bindGroup = ctx.createBindGroup(new WGPUBindGroupDescriptor{
       .layout = wgpuRenderPipelineGetBindGroupLayout(pipeline, 0),
       .entryCount = 1,
       .entries = new WGPUBindGroupEntry{
@@ -174,22 +174,21 @@ public:
         },
       });
 
-    if (!ImGui_init(&wgpu)) throw std::runtime_error("ImGui_init failed");
+    if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
   }
 
   ~Application() {
-    wgpuBufferRelease(vertexBuffer);
     wgpuRenderPipelineRelease(pipeline);
     wgpuBufferRelease(uniforms);
     wgpuBindGroupRelease(bindGroup);
   }
 
   void render() {
-    WGPUTextureView view = wgpu.surfaceTextureCreateView();
+    WGPUTextureView view = ctx.surfaceTextureCreateView();
 
-    wgpu.writeBuffer(uniforms, 0, &state.alpha, sizeof(float));
+    ctx.writeBuffer(uniforms, 0, &state.alpha, sizeof(float));
 
-    WGPUCommandEncoder encoder = wgpu.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
+    WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
       .colorAttachments = new WGPURenderPassColorAttachment{
@@ -201,14 +200,14 @@ public:
       }
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer, 0, wgpuBufferGetSize(vertexBuffer));
+    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
     wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
     wgpuCommandEncoderRelease(encoder);
-    wgpu.queueSubmit(1, &command);
+    ctx.queueSubmit(1, &command);
     wgpuCommandBufferRelease(command);
 
     ImGui_ImplWGPU_NewFrame();
@@ -216,7 +215,7 @@ public:
     ImGui::NewFrame();
     if (state.show_demo) ImGui::ShowDemoWindow();
     {
-      ImGui::Begin("Controls");
+      ImGui::Begin("Controls", nullptr, ImGuiWindowFlags_NoTitleBar);
 
       ImGui::Checkbox("Demo Window", &state.show_demo);
       ImGui::SliderFloat("alpha", &state.alpha, 0.0f, 1.0f);
@@ -225,10 +224,10 @@ public:
     }
     ImGui::Render();
 
-    ImGui_render(&wgpu, view);
+    ImGui_render(&ctx, view);
 
-    wgpu.present();
-    wgpu.surfaceTextureViewRelease(view);
+    ctx.present();
+    ctx.surfaceTextureViewRelease(view);
   }
 };
 
