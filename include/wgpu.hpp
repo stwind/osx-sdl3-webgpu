@@ -184,12 +184,16 @@ namespace WGPU {
   };
 
   class Buffer {
+  private:
+    Context* ctx;
+
   public:
     WGPUBufferDescriptor spec;
     WGPUBuffer buf;
+    uint64_t size;
 
     Buffer(Context* ctx, WGPUBufferDescriptor spec)
-      : ctx(ctx), spec(spec), buf(ctx->createBuffer(&spec)) {
+      : ctx(ctx), spec(spec), buf(ctx->createBuffer(&spec)), size(wgpuBufferGetSize(buf)) {
     }
 
     ~Buffer() {
@@ -199,12 +203,12 @@ namespace WGPU {
     void write(const void* data, uint64_t offset = 0) {
       ctx->writeBuffer(buf, offset, data, spec.size);
     }
-
-  private:
-    Context* ctx;
   };
 
   class BindGroup {
+  private:
+    Context* ctx;
+
   public:
     WGPUBindGroup bindGroup;
     WGPUBindGroupLayout layout;
@@ -223,8 +227,5 @@ namespace WGPU {
     ~BindGroup() {
       wgpuBindGroupRelease(bindGroup);
     }
-
-  private:
-    Context* ctx;
   };
 }

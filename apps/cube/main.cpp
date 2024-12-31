@@ -14,16 +14,15 @@ struct VSOutput {
 
 @group(0) @binding(0) var<uniform> camera : Camera;
 
-@vertex fn vs_main(
+@vertex fn vs(
   @location(0) position: vec3f,
   @location(1) normal: vec3f) -> VSOutput {
 
-  var pos = vec4f(position, 1);
-  pos = camera.proj * camera.view * pos;
+  let pos = camera.proj * camera.view * vec4f(position, 1);
   return VSOutput(pos, normal);
 }
 
-@fragment fn fs_main(@location(0) normal: vec3f) -> @location(0) vec4f {
+@fragment fn fs(@location(0) normal: vec3f) -> @location(0) vec4f {
 	return vec4f(pow(normalize(normal) * .5 + .5, vec3f(2.2)), 1.);
 }
 )";
@@ -135,7 +134,7 @@ public:
         .binding = 0,
         .buffer = uniforms.buf,
         .offset = 0,
-        .size = sizeof(CameraUniform),
+        .size = uniforms.size
       }
     }
   );
@@ -166,7 +165,7 @@ public:
           }
         },
         .module = shaderModule,
-        .entryPoint = "vs_main",
+        .entryPoint = "vs",
         .constantCount = 0,
       },
       .primitive = {
@@ -177,7 +176,7 @@ public:
       },
       .fragment = new WGPUFragmentState{
         .module = shaderModule,
-        .entryPoint = "fs_main",
+        .entryPoint = "fs",
         .constantCount = 0,
         .targetCount = 1,
         .targets = new WGPUColorTargetState[1]{
@@ -240,8 +239,8 @@ public:
         }
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
-    wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, wgpuBufferGetSize(indexBuffer.buf));
+    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, vertexBuffer.size);
+    wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, indexBuffer.size);
     wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
     wgpuRenderPassEncoderEnd(pass);
