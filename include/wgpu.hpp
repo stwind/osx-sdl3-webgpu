@@ -210,14 +210,18 @@ namespace WGPU {
     WGPUBindGroupLayout layout;
     WGPUBindGroupLayoutDescriptor layoutSpec;
 
-    BindGroup(Context* ctx, WGPUBindGroupLayoutDescriptor layoutSpec, size_t entryCount, const WGPUBindGroupEntry* entries)
+    BindGroup(Context* ctx, WGPUBindGroupLayoutDescriptor layoutSpec, const std::vector<WGPUBindGroupEntry>& entries)
       : layoutSpec(layoutSpec), layout(ctx->createBindGroupLayout(&layoutSpec)) {
       bindGroup = ctx->createBindGroup(new WGPUBindGroupDescriptor{
         .label = layoutSpec.label,
         .layout = layout,
-        .entryCount = entryCount,
-        .entries = entries
+        .entryCount = entries.size(),
+        .entries = entries.data()
         });
+    }
+
+    ~BindGroup() {
+      wgpuBindGroupRelease(bindGroup);
     }
 
   private:

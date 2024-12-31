@@ -130,14 +130,15 @@ public:
         },
       }
     },
-    }, 1, new WGPUBindGroupEntry[1]{
+    }, {
       {
         .binding = 0,
         .buffer = uniforms.buf,
         .offset = 0,
         .size = sizeof(CameraUniform),
       }
-    });
+    }
+  );
 
   Application() {
     vertexBuffer.write(vertexData.data());
@@ -228,13 +229,15 @@ public:
     WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
-      .colorAttachments = new WGPURenderPassColorAttachment{
-        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-        .view = view,
-        .loadOp = WGPULoadOp_Clear,
-        .storeOp = WGPUStoreOp_Store,
-        .clearValue = WGPUColor{ 0., 0., 0., 1. },
-      }
+      .colorAttachments = new WGPURenderPassColorAttachment[1]{
+        {
+          .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+          .view = view,
+          .loadOp = WGPULoadOp_Clear,
+          .storeOp = WGPUStoreOp_Store,
+          .clearValue = WGPUColor{ 0., 0., 0., 1. }
+        }
+        }
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
     wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
