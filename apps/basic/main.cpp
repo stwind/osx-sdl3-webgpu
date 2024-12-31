@@ -109,7 +109,7 @@ public:
     pipeline = ctx.createRenderPipeline(new WGPURenderPipelineDescriptor{
       .layout = ctx.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
         .bindGroupLayoutCount = 1,
-        .bindGroupLayouts = new WGPUBindGroupLayout[1]{ bindGroup.layout }
+        .bindGroupLayouts = &bindGroup.layout,
         }),
       .vertex = {
         .bufferCount = 1,
