@@ -86,7 +86,10 @@ public:
   WGPUSurfaceTexture surfaceTexture;
   WGPUTextureFormat surfaceFormat;
 
-  WGPU(int w, int h, WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb) : surfaceFormat(surfaceFormat) {
+  float aspect;
+
+  WGPU(int w, int h, WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb)
+    : surfaceFormat(surfaceFormat), aspect(float(w) / float(h)) {
     SDL_SetLogOutputFunction(LogOutputFunction, NULL);
     if (!SDL_Init(SDL_INIT_VIDEO)) throw std::runtime_error("SDL_Init failed");
 
