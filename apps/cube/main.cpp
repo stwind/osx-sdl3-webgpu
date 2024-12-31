@@ -130,6 +130,12 @@ public:
     }
     });
 
+  struct {
+    bool isDown = false;
+    ImVec2 downPos = { -1,-1 };
+    ImVec2 delta = { 0,0 };
+  } state;
+
   Application() {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
 
@@ -249,17 +255,40 @@ public:
     wgpuCommandBufferRelease(command);
 
     ImGuiIO& io = ImGui::GetIO();
-
     ImGui_ImplWGPU_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+
+    if (state.isDown != ImGui::IsMouseDown(0)) {
+      if (!state.isDown) {
+        state.downPos.x = io.MousePos.x;
+        state.downPos.y = io.MousePos.y;
+      }
+      else {
+        state.downPos.x = -1.;
+        state.downPos.y = -1.;
+      }
+    }
+    state.isDown = ImGui::IsMouseDown(0);
+    if (state.isDown) {
+      state.delta.x = io.MousePos.x - state.downPos.x;
+      state.delta.y = io.MousePos.y - state.downPos.y;
+    }
+    else {
+      state.delta.x = 0.;
+      state.delta.y = 0.;
+    }
+
     {
       ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-      ImGui::SetNextWindowSize(ImVec2(200, 0), ImGuiCond_Once);
+      ImGui::SetNextWindowSize(ImVec2(200, 70), ImGuiCond_Once);
       ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 
       if (ImGui::IsMousePosValid())
         ImGui::Text("Mouse pos: (%g, %g)", io.MousePos.x, io.MousePos.y);
+
+      ImGui::Text("down pos: (%g, %g)", state.downPos.x, state.downPos.y);
+      ImGui::Text("delta: (%g, %g)", state.delta.x, state.delta.y);
 
       ImGui::End();
     }

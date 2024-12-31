@@ -64,6 +64,8 @@ public:
       .size = vertexData.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
     }) {
+    if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
+
     vertexBuffer.write(vertexData.data());
 
     WGPUShaderModule shaderModule = ctx.createShaderModule(shaderSource);
@@ -124,8 +126,6 @@ public:
       }
       });
     wgpuShaderModuleRelease(shaderModule);
-
-    if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
   }
 
   ~Application() {
