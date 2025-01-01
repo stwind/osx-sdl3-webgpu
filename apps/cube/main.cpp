@@ -97,6 +97,34 @@ std::vector<uint16_t> indexData{
   20, 22, 23
 };
 
+using Vec3 = std::array<float, 3>;
+using Mat44 = std::array<float, 16>;
+using Quaternion = std::array<float, 4>;
+
+Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
+  rad *= .5;
+  float s = std::sin(rad);
+  quat[0] = s * axis[0];
+  quat[1] = s * axis[1];
+  quat[2] = s * axis[2];
+  quat[3] = std::cos(rad);
+  return quat;
+}
+
+Mat44& rotation(Mat44& mat, const Quaternion& quat) {
+  float x = quat[0], y = quat[1], z = quat[2], w = quat[3];
+  float x2 = x + x, y2 = y + y, z2 = z + z;
+  float xx = x * x2, xy = x * y2, xz = x * z2;
+  float yy = y * y2, yz = y * z2, zz = z * z2;
+  float wx = w * x2, wy = w * y2, wz = w * z2;
+
+  mat[0] = 1 - (yy + zz); mat[1] = xy + wz; mat[2] = xz - wy; mat[3] = 0;
+  mat[4] = xy - wz; mat[5] = 1 - (xx + zz); mat[6] = yz + wx; mat[7] = 0;
+  mat[8] = xz + wy; mat[9] = yz - wx; mat[10] = 1 - (xx + yy); mat[11] = 0;
+  mat[12] = 0; mat[13] = 0; mat[14] = 0; mat[15] = 1;
+  return mat;
+}
+
 class Application {
 public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
@@ -152,6 +180,8 @@ public:
     bool isDown = false;
     ImVec2 downPos = { -1,-1 };
     ImVec2 delta = { 0,0 };
+
+    float rad = 0;
   } state;
 
   Application() {
@@ -231,13 +261,14 @@ public:
       .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
     };
     uniforms.write(&uniformData);
-    std::array<float, 16> modelMat{
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1,
-    };
-    model.write(&modelMat);
+
+    // Quaternion quat{ 0,0,0,1 };
+    // Vec3 axis{ 0,1,0 };
+    // axisAngle(quat, axis, 45. * M_PI / 180.0);
+
+    // Mat44 m;
+    // rotation(m, quat);
+    // model.write(&m);
   }
 
   ~Application() {
@@ -252,6 +283,14 @@ public:
   }
 
   void render() {
+    Quaternion quat{ 0,0,0,1 };
+    Vec3 axis{ 0,1,0 };
+    axisAngle(quat, axis, state.rad);
+
+    Mat44 m;
+    rotation(m, quat);
+    model.write(&m);
+
     WGPUTextureView view = ctx.surfaceTextureCreateView();
 
     WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
@@ -302,6 +341,15 @@ public:
     else {
       state.delta.x = 0.;
       state.delta.y = 0.;
+    }
+
+    {
+      ImGui::SetNextWindowPos(ImVec2(10, 120), ImGuiCond_Once);
+      ImGui::SetNextWindowSize(ImVec2(200, 0), ImGuiCond_Once);
+      ImGui::Begin("Controls");
+      ImGui::SliderFloat("rad", &state.rad, 0.0f, M_PI * 2.);
+
+      ImGui::End();
     }
 
     {
