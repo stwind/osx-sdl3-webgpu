@@ -8,7 +8,7 @@ struct VSOutput {
     @location(0) color: vec3f,
 };
 
-@vertex fn vs_main(
+@vertex fn vs(
   @location(0) position: vec2f,
   @location(1) color: vec3f) -> VSOutput {
 
@@ -17,7 +17,7 @@ struct VSOutput {
 
 @group(0) @binding(0) var<uniform> uAlpha: f32;
 
-@fragment fn fs_main(@location(0) color: vec3f) -> @location(0) vec4f {
+@fragment fn fs(@location(0) color: vec3f) -> @location(0) vec4f {
 	return vec4f(pow(color, vec3f(2.2)), uAlpha);
 }
 )";
@@ -88,7 +88,7 @@ public:
           }
         },
         .module = shaderModule,
-        .entryPoint = "vs_main",
+        .entryPoint = "vs",
         .constantCount = 0,
       },
       .primitive = {
@@ -99,7 +99,7 @@ public:
       },
       .fragment = new WGPUFragmentState{
         .module = shaderModule,
-        .entryPoint = "fs_main",
+        .entryPoint = "fs",
         .constantCount = 0,
         .targetCount = 1,
         .targets = new WGPUColorTargetState{

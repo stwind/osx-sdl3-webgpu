@@ -14,12 +14,13 @@ struct VSOutput {
 };
 
 @group(0) @binding(0) var<uniform> camera : Camera;
+@group(0) @binding(1) var<uniform> model : mat4x4f;
 
 @vertex fn vs(
   @location(0) position: vec3f,
   @location(1) normal: vec3f) -> VSOutput {
 
-  let pos = camera.proj * camera.view * vec4f(position, 1);
+  let pos = camera.proj * camera.view * model * vec4f(position, 1);
   return VSOutput(pos, normal);
 }
 
@@ -115,6 +116,12 @@ public:
     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
     .mappedAtCreation = false,
     });
+  WGPU::Buffer model = WGPU::Buffer(&ctx, {
+    .label = "model",
+    .size = 16 * sizeof(float),
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+    .mappedAtCreation = false,
+    });
 
   WGPU::BindGroup bindGroup = WGPU::BindGroup(&ctx, "camera", {
     {
@@ -126,6 +133,17 @@ public:
         .type = WGPUBufferBindingType_Uniform,
         .hasDynamicOffset = false,
         .minBindingSize = uniforms.size,
+      }
+    },
+    {
+      .binding = 1,
+      .buffer = &model,
+      .offset = 0,
+      .visibility = WGPUShaderStage_Vertex,
+      .layout = {
+        .type = WGPUBufferBindingType_Uniform,
+        .hasDynamicOffset = false,
+        .minBindingSize = model.size,
       }
     }
     });
@@ -213,6 +231,13 @@ public:
       .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
     };
     uniforms.write(&uniformData);
+    std::array<float, 16> modelMat{
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1,
+    };
+    model.write(&modelMat);
   }
 
   ~Application() {
