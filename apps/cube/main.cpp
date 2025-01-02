@@ -422,32 +422,33 @@ public:
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
 
-    WGPUCommandEncoderDescriptor encoderDescriptor;
-    WGPUCommandEncoder encoder = ctx.createCommandEncoder(&encoderDescriptor);
+    {
+      WGPUCommandEncoderDescriptor encoderDescriptor{};
+      WGPUCommandEncoder encoder = ctx.createCommandEncoder(&encoderDescriptor);
+      WGPURenderPassColorAttachment attachment{
+       .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+       .view = view,
+       .loadOp = WGPULoadOp_Clear,
+       .storeOp = WGPUStoreOp_Store,
+       .clearValue = WGPUColor{ 0., 0., 0., 1. }
+      };
+      WGPURenderPassDescriptor passDescriptor{
+        .colorAttachmentCount = 1,
+        .colorAttachments = &attachment
+      };
+      WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
+      wgpuRenderPassEncoderSetPipeline(pass, pipeline.handle);
+      wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.handle, 0, nullptr);
+      cube.draw(&pass);
+      wgpuRenderPassEncoderEnd(pass);
+      wgpuRenderPassEncoderRelease(pass);
 
-    WGPURenderPassColorAttachment attachment{
-      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-      .view = view,
-      .loadOp = WGPULoadOp_Clear,
-      .storeOp = WGPUStoreOp_Store,
-      .clearValue = WGPUColor{ 0., 0., 0., 1. }
-    };
-    WGPURenderPassDescriptor passDescriptor{
-      .colorAttachmentCount = 1,
-      .colorAttachments = &attachment
-    };
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
-    wgpuRenderPassEncoderSetPipeline(pass, pipeline.handle);
-    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.handle, 0, nullptr);
-    cube.draw(&pass);
-    wgpuRenderPassEncoderEnd(pass);
-    wgpuRenderPassEncoderRelease(pass);
-
-    WGPUCommandBufferDescriptor commandDescriptor;
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &commandDescriptor);
-    wgpuCommandEncoderRelease(encoder);
-    ctx.queueSubmit(1, &command);
-    wgpuCommandBufferRelease(command);
+      WGPUCommandBufferDescriptor commandDescriptor{};
+      WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &commandDescriptor);
+      wgpuCommandEncoderRelease(encoder);
+      ctx.queueSubmit(1, &command);
+      wgpuCommandBufferRelease(command);
+    }
 
     ImGuiIO& io = ImGui::GetIO();
     ImGui_ImplWGPU_NewFrame();
@@ -498,31 +499,7 @@ public:
       ImGui::End();
     }
     ImGui::Render();
-
-    {
-      WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
-
-      WGPURenderPassColorAttachment attachment{
-        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-        .loadOp = WGPULoadOp_Load,
-        .storeOp = WGPUStoreOp_Store,
-        .view = view,
-      };
-      WGPURenderPassDescriptor passDescriptor{
-        .colorAttachmentCount = 1,
-        .colorAttachments = &attachment,
-      };
-      WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
-      ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
-      wgpuRenderPassEncoderEnd(pass);
-      wgpuRenderPassEncoderRelease(pass);
-
-      WGPUCommandBufferDescriptor commandDescriptor;
-      WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &commandDescriptor);
-      wgpuCommandEncoderRelease(encoder);
-      ctx.queueSubmit(1, &command);
-      wgpuCommandBufferRelease(command);
-    }
+    ImGui_render(ctx, view);
 
     ctx.present();
     ctx.surfaceTextureViewRelease(view);

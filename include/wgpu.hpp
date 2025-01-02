@@ -28,7 +28,7 @@ void LogOutputFunction(void* userdata, int category, SDL_LogPriority priority, c
 }
 
 WGPUAdapter requestAdapter(WGPUSurface surface, WGPUInstance instance) {
-  WGPUAdapter adapter;
+  WGPUAdapter adapter = nullptr;
   WGPURequestAdapterOptions options{
     .compatibleSurface = surface,
     .powerPreference = WGPUPowerPreference_HighPerformance,
@@ -43,8 +43,8 @@ WGPUAdapter requestAdapter(WGPUSurface surface, WGPUInstance instance) {
 };
 
 WGPUDevice requestDevice(WGPUAdapter adapter) {
-  WGPUDevice device;
-  WGPUSupportedLimits supportedLimits;
+  WGPUDevice device = nullptr;
+  WGPUSupportedLimits supportedLimits{};
   wgpuAdapterGetLimits(adapter, &supportedLimits);
   WGPUFeatureName features[3] = {
       WGPUFeatureName_Float32Filterable,
@@ -101,7 +101,7 @@ namespace WGPU {
       window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_METAL);
       if (window == nullptr) throw std::runtime_error("SDL_CreateWindow failed");
 
-      WGPUInstanceDescriptor descriptor;
+      WGPUInstanceDescriptor descriptor{};
       WGPUInstance instance = wgpuCreateInstance(&descriptor);
       surface = SDL_GetWGPUSurface(instance, window);
       WGPUAdapter adapter = requestAdapter(surface, instance);
