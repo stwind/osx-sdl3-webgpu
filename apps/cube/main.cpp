@@ -430,7 +430,8 @@ public:
 
     {
       WGPUCommandEncoderDescriptor encoderDescriptor{};
-      WGPUCommandEncoder encoder = ctx.createCommandEncoder(&encoderDescriptor);
+      WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
+
       WGPURenderPassColorAttachment attachment{
        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
        .view = view,
@@ -442,16 +443,14 @@ public:
         .colorAttachmentCount = 1,
         .colorAttachments = &attachment
       };
-      WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
-      wgpuRenderPassEncoderSetPipeline(pass, pipeline.handle);
-      wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.handle, 0, nullptr);
-      cube.draw(pass);
-      wgpuRenderPassEncoderEnd(pass);
-      wgpuRenderPassEncoderRelease(pass);
+      WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
+      wgpuRenderPassEncoderSetPipeline(pass.handle, pipeline.handle);
+      wgpuRenderPassEncoderSetBindGroup(pass.handle, 0, bindGroup.handle, 0, nullptr);
+      cube.draw(pass.handle);
+      pass.end();
 
       WGPUCommandBufferDescriptor commandDescriptor{};
-      commands.push_back(wgpuCommandEncoderFinish(encoder, &commandDescriptor));
-      wgpuCommandEncoderRelease(encoder);
+      commands.push_back(encoder.finish(&commandDescriptor));
     }
 
     ImGui_ImplWGPU_NewFrame();
@@ -506,7 +505,7 @@ public:
 
     {
       WGPUCommandEncoderDescriptor encoderDescriptor{};
-      WGPUCommandEncoder encoder = ctx.createCommandEncoder(&encoderDescriptor);
+      WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
 
       WGPURenderPassColorAttachment attachment{
         .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
@@ -518,14 +517,13 @@ public:
         .colorAttachmentCount = 1,
         .colorAttachments = &attachment,
       };
-      WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
-      ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
-      wgpuRenderPassEncoderEnd(pass);
-      wgpuRenderPassEncoderRelease(pass);
+      WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
+
+      ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass.handle);
+      pass.end();
 
       WGPUCommandBufferDescriptor commandDescriptor{};
-      commands.push_back(wgpuCommandEncoderFinish(encoder, &commandDescriptor));
-      wgpuCommandEncoderRelease(encoder);
+      commands.push_back(encoder.finish(&commandDescriptor));
     }
 
     ctx.queueSubmit(commands.size(), commands.data());

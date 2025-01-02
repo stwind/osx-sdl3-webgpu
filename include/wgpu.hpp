@@ -274,4 +274,42 @@ namespace WGPU {
       wgpuBindGroupRelease(handle);
     }
   };
+
+  class RenderPass {
+  public:
+    WGPURenderPassEncoder handle;
+
+    RenderPass(WGPUCommandEncoder encoder, const WGPURenderPassDescriptor* descripter) {
+      handle = wgpuCommandEncoderBeginRenderPass(encoder, descripter);
+    }
+
+    void end() {
+      wgpuRenderPassEncoderEnd(handle);
+    }
+
+    ~RenderPass() {
+      wgpuRenderPassEncoderRelease(handle);
+    }
+  };
+
+  class CommandEncoder {
+  public:
+    WGPUCommandEncoder handle;
+
+    CommandEncoder(WGPU::Context& ctx, const WGPUCommandEncoderDescriptor* descriptor) {
+      handle = ctx.createCommandEncoder(descriptor);
+    }
+
+    ~CommandEncoder() {
+      wgpuCommandEncoderRelease(handle);
+    }
+
+    RenderPass renderPass(const WGPURenderPassDescriptor* descripter) {
+      return RenderPass(handle, descripter);
+    }
+
+    WGPUCommandBuffer finish(const WGPUCommandBufferDescriptor* descriptor) {
+      return wgpuCommandEncoderFinish(handle, descriptor);
+    }
+  };
 }
