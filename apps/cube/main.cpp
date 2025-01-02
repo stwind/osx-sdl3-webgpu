@@ -101,7 +101,47 @@ using Vec3 = std::array<float, 3>;
 using Mat44 = std::array<float, 16>;
 using Quaternion = std::array<float, 4>;
 
-Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
+inline Vec3& sph2cart(Vec3& out, const Vec3& v) {
+  float az = v[0], el = v[1], r = v[2];
+  float c = std::cos(el);
+  out[0] = c * std::cos(az) * r;
+  out[1] = c * std::sin(az) * r;
+  out[2] = std::sin(el) * r;
+  return out;
+}
+
+inline float dot(const Vec3& a, const Vec3& b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+inline float norm(const Vec3& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+inline float norm(const Quaternion& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]); }
+
+inline  Vec3& normalize(Vec3& out, const Vec3& v, float eps = 1e-12) {
+  float n = 1. / norm(v);
+  out[0] = v[0] * n;
+  out[1] = v[1] * n;
+  out[2] = v[2] * n;
+  return out;
+}
+
+inline  Quaternion& normalize(Quaternion& out, const Quaternion& v, float eps = 1e-12) {
+  float n = 1. / norm(v);
+  out[0] = v[0] * n;
+  out[1] = v[1] * n;
+  out[2] = v[2] * n;
+  out[3] = v[3] * n;
+  return out;
+}
+
+inline  Vec3& orthogonal(Vec3& out, const Vec3& v, float m = .5, float n = .5) {
+  out[0] = m * -v[1] + n * -v[2];
+  out[1] = m * v[0];
+  out[2] = n * v[0];
+  return normalize(out, out);
+}
+
+inline  Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
   rad *= .5;
   float s = std::sin(rad);
   quat[0] = s * axis[0];
@@ -111,7 +151,33 @@ Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
   return quat;
 }
 
-Mat44& rotation(Mat44& mat, const Quaternion& quat) {
+inline  Quaternion& between(Quaternion& out, const Vec3& a, const Vec3& b) {
+  float w = dot(a, b);
+  out[0] = a[1] * b[2] - a[2] * b[1];
+  out[1] = a[2] * b[0] - a[0] * b[2];
+  out[2] = a[0] * b[1] - a[1] * b[0];
+  out[3] = w + std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2] + w * w);
+  if (out[0] == 0. && out[1] == 0. && out[2] == 0. && out[3] == 0.) {
+    Vec3 axis;
+    return axisAngle(out, orthogonal(axis, a), M_PI);
+  }
+
+  return normalize(out, out);
+}
+
+inline  Quaternion& betweenZ(Quaternion& out, const Vec3& b) {
+  float w = b[2];
+  out[0] = -b[1]; out[1] = b[0]; out[2] = 0.;
+  out[3] = w + std::sqrt(out[0] * out[0] + out[1] * out[1] + w * w);
+  if (out[0] == 0. && out[1] == 0. && out[2] == 0. && out[3] == 0.) {
+    out[1] = 1;
+    return out;
+  }
+
+  return normalize(out, out);
+}
+
+inline  Mat44& rotation(Mat44& mat, const Quaternion& quat) {
   float x = quat[0], y = quat[1], z = quat[2], w = quat[3];
   float x2 = x + x, y2 = y + y, z2 = z + z;
   float xx = x * x2, xy = x * y2, xz = x * z2;
@@ -181,7 +247,8 @@ public:
     ImVec2 downPos = { -1,-1 };
     ImVec2 delta = { 0,0 };
 
-    float rad = 0;
+    float phi = 0;
+    float theta = M_PI_2;
   } state;
 
   Application() {
@@ -261,14 +328,6 @@ public:
       .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
     };
     uniforms.write(&uniformData);
-
-    // Quaternion quat{ 0,0,0,1 };
-    // Vec3 axis{ 0,1,0 };
-    // axisAngle(quat, axis, 45. * M_PI / 180.0);
-
-    // Mat44 m;
-    // rotation(m, quat);
-    // model.write(&m);
   }
 
   ~Application() {
@@ -283,12 +342,12 @@ public:
   }
 
   void render() {
-    Quaternion quat{ 0,0,0,1 };
-    Vec3 axis{ 0,1,0 };
-    axisAngle(quat, axis, state.rad);
+    Vec3 vec;
+    Quaternion rot;
+    betweenZ(rot, sph2cart(vec, { state.phi, state.theta,1. }));
 
     Mat44 m;
-    rotation(m, quat);
+    rotation(m, rot);
     model.write(&m);
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
@@ -347,7 +406,8 @@ public:
       ImGui::SetNextWindowPos(ImVec2(10, 120), ImGuiCond_Once);
       ImGui::SetNextWindowSize(ImVec2(200, 0), ImGuiCond_Once);
       ImGui::Begin("Controls");
-      ImGui::SliderFloat("rad", &state.rad, 0.0f, M_PI * 2.);
+      ImGui::SliderFloat("phi", &state.phi, 0.0f, M_PI * 2.);
+      ImGui::SliderFloat("theta", &state.theta, -M_PI_2, M_PI_2);
 
       ImGui::End();
     }
