@@ -283,12 +283,12 @@ namespace WGPU {
       handle = wgpuCommandEncoderBeginRenderPass(encoder, descripter);
     }
 
-    void end() {
-      wgpuRenderPassEncoderEnd(handle);
-    }
-
     ~RenderPass() {
       wgpuRenderPassEncoderRelease(handle);
+    }
+
+    void end() {
+      wgpuRenderPassEncoderEnd(handle);
     }
   };
 
