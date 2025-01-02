@@ -22,5 +22,3 @@ jobs:
       - name: Install cmake
         run: |
           wget -qc https://github.com/Kitware/CMake/releases/download/${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
-          tar xzf cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
-          ${CMAKE} --version
