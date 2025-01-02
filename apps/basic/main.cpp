@@ -154,7 +154,7 @@ public:
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
     wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
-    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.bindGroup, 0, nullptr);
+    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.handle, 0, nullptr);
     wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
@@ -177,7 +177,7 @@ public:
     }
     ImGui::Render();
 
-    ImGui_render(&ctx, view);
+    ImGui_render(ctx, view);
 
     ctx.present();
     ctx.surfaceTextureViewRelease(view);

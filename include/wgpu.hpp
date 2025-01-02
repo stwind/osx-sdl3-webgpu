@@ -226,7 +226,7 @@ namespace WGPU {
     Context& ctx;
 
   public:
-    WGPUBindGroup bindGroup;
+    WGPUBindGroup handle;
     WGPUBindGroupLayout layout;
     WGPUBindGroupLayoutDescriptor layoutSpec;
 
@@ -264,14 +264,14 @@ namespace WGPU {
         .entryCount = n,
         .entries = bindGroupEntries
       };
-      bindGroup = ctx.createBindGroup(&descriptor);
+      handle = ctx.createBindGroup(&descriptor);
 
       delete[] layoutEntries;
       delete[] bindGroupEntries;
     }
 
     ~BindGroup() {
-      wgpuBindGroupRelease(bindGroup);
+      wgpuBindGroupRelease(handle);
     }
   };
 }

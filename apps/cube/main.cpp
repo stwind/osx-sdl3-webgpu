@@ -246,7 +246,7 @@ public:
     WGPUMultisampleState multisample;
   };
 
-  WGPURenderPipeline pipeline;
+  WGPURenderPipeline handle;
 
   RenderPipeline(WGPU::Context& ctx, Descriptor desc) : ctx(ctx) {
     WGPUShaderModule shaderModule = ctx.createShaderModule(desc.source);
@@ -267,6 +267,12 @@ public:
       .bindGroupLayoutCount = bindGroupLayoutCount,
       .bindGroupLayouts = bindGroupLayouts,
     };
+    WGPUFragmentState fragmentState{
+      .module = shaderModule,
+      .entryPoint = desc.fragment.entryPoint,
+      .targetCount = targetCount,
+      .targets = targets,
+    };
     WGPURenderPipelineDescriptor pDescriptor{
       .layout = ctx.createPipelineLayout(&lDescriptor),
       .vertex = {
@@ -276,21 +282,19 @@ public:
         .entryPoint = desc.vertex.entryPoint
       },
       .primitive = desc.primitive,
-      .fragment = new WGPUFragmentState{
-        .module = shaderModule,
-        .entryPoint = desc.fragment.entryPoint,
-        .targetCount = targetCount,
-        .targets = targets,
-      },
+      .fragment = &fragmentState,
       .multisample = desc.multisample,
     };
-    pipeline = ctx.createRenderPipeline(&pDescriptor);
-
+    handle = ctx.createRenderPipeline(&pDescriptor);
     wgpuShaderModuleRelease(shaderModule);
 
     delete[] bindGroupLayouts;
     delete[] buffers;
     delete[] targets;
+  }
+
+  ~RenderPipeline() {
+    wgpuRenderPipelineRelease(handle);
   }
 };
 
@@ -337,7 +341,7 @@ public:
     }
     });
 
-  RenderPipeline pipeline = RenderPipeline(ctx, RenderPipeline::Descriptor{
+  RenderPipeline pipeline = RenderPipeline(ctx, {
     .source = shaderSource,
     .bindGroups = {&bindGroup},
     .vertex = {
@@ -418,27 +422,29 @@ public:
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
 
-    WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
+    WGPUCommandEncoderDescriptor encoderDescriptor;
+    WGPUCommandEncoder encoder = ctx.createCommandEncoder(&encoderDescriptor);
 
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
+    WGPURenderPassColorAttachment attachment{
+      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+      .view = view,
+      .loadOp = WGPULoadOp_Clear,
+      .storeOp = WGPUStoreOp_Store,
+      .clearValue = WGPUColor{ 0., 0., 0., 1. }
+    };
+    WGPURenderPassDescriptor passDescriptor{
       .colorAttachmentCount = 1,
-      .colorAttachments = new WGPURenderPassColorAttachment[1]{
-        {
-          .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-          .view = view,
-          .loadOp = WGPULoadOp_Clear,
-          .storeOp = WGPUStoreOp_Store,
-          .clearValue = WGPUColor{ 0., 0., 0., 1. }
-        }
-        }
-      });
-    wgpuRenderPassEncoderSetPipeline(pass, pipeline.pipeline);
-    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.bindGroup, 0, nullptr);
+      .colorAttachments = &attachment
+    };
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
+    wgpuRenderPassEncoderSetPipeline(pass, pipeline.handle);
+    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.handle, 0, nullptr);
     cube.draw(&pass);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
 
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
+    WGPUCommandBufferDescriptor commandDescriptor;
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &commandDescriptor);
     wgpuCommandEncoderRelease(encoder);
     ctx.queueSubmit(1, &command);
     wgpuCommandBufferRelease(command);
@@ -492,7 +498,31 @@ public:
       ImGui::End();
     }
     ImGui::Render();
-    ImGui_render(&ctx, view);
+
+    {
+      WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
+
+      WGPURenderPassColorAttachment attachment{
+        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+        .loadOp = WGPULoadOp_Load,
+        .storeOp = WGPUStoreOp_Store,
+        .view = view,
+      };
+      WGPURenderPassDescriptor passDescriptor{
+        .colorAttachmentCount = 1,
+        .colorAttachments = &attachment,
+      };
+      WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
+      ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
+      wgpuRenderPassEncoderEnd(pass);
+      wgpuRenderPassEncoderRelease(pass);
+
+      WGPUCommandBufferDescriptor commandDescriptor;
+      WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &commandDescriptor);
+      wgpuCommandEncoderRelease(encoder);
+      ctx.queueSubmit(1, &command);
+      wgpuCommandBufferRelease(command);
+    }
 
     ctx.present();
     ctx.surfaceTextureViewRelease(view);
