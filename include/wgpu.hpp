@@ -185,15 +185,15 @@ namespace WGPU {
 
   class Buffer {
   private:
-    Context* ctx;
+    Context& ctx;
 
   public:
     WGPUBufferDescriptor spec;
     WGPUBuffer buf;
     uint64_t size;
 
-    Buffer(Context* ctx, WGPUBufferDescriptor spec)
-      : ctx(ctx), spec(spec), buf(ctx->createBuffer(&spec)), size(wgpuBufferGetSize(buf)) {
+    Buffer(Context& ctx, WGPUBufferDescriptor spec)
+      : ctx(ctx), spec(spec), buf(ctx.createBuffer(&spec)), size(wgpuBufferGetSize(buf)) {
     }
 
     ~Buffer() {
@@ -201,7 +201,7 @@ namespace WGPU {
     }
 
     void write(const void* data, uint64_t offset = 0) {
-      ctx->writeBuffer(buf, offset, data, spec.size);
+      ctx.writeBuffer(buf, offset, data, spec.size);
     }
   };
 
@@ -218,14 +218,14 @@ namespace WGPU {
 
   class BindGroup {
   private:
-    Context* ctx;
+    Context& ctx;
 
   public:
     WGPUBindGroup bindGroup;
     WGPUBindGroupLayout layout;
     WGPUBindGroupLayoutDescriptor layoutSpec;
 
-    BindGroup(Context* ctx, const char* label, const std::vector<BindGroupEntry>& entries) {
+    BindGroup(Context& ctx, const char* label, const std::vector<BindGroupEntry>& entries) : ctx(ctx) {
       size_t n = entries.size();
 
       WGPUBindGroupLayoutEntry* layoutEntries = new WGPUBindGroupLayoutEntry[n];
@@ -243,7 +243,7 @@ namespace WGPU {
         .entryCount = n,
         .entries = layoutEntries
       };
-      layout = ctx->createBindGroupLayout(&layoutSpec);
+      layout = ctx.createBindGroupLayout(&layoutSpec);
 
       WGPUBindGroupEntry* bindGroupEntries = new WGPUBindGroupEntry[n];
       for (int i = 0; i < n; i++) bindGroupEntries[i] = WGPUBindGroupEntry{
@@ -253,7 +253,7 @@ namespace WGPU {
         .size = entries[i].buffer->size
       };
 
-      bindGroup = ctx->createBindGroup(new WGPUBindGroupDescriptor{
+      bindGroup = ctx.createBindGroup(new WGPUBindGroupDescriptor{
         .label = layoutSpec.label,
         .layout = layout,
         .entryCount = n,

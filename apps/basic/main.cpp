@@ -35,13 +35,13 @@ public:
 
   WGPU::Buffer vertexBuffer;
 
-  WGPU::Buffer uniforms = WGPU::Buffer(&ctx, {
+  WGPU::Buffer uniforms = WGPU::Buffer(ctx, {
     .label = "params",
     .size = 4 * sizeof(float),
     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
     .mappedAtCreation = false,
     });
-  WGPU::BindGroup bindGroup = WGPU::BindGroup(&ctx, "params", {
+  WGPU::BindGroup bindGroup = WGPU::BindGroup(ctx, "params", {
     {
       .binding = 0,
       .buffer = &uniforms,
@@ -60,7 +60,7 @@ public:
     float alpha = .5;
   } state;
 
-  Application() : vertexBuffer(&ctx, {
+  Application() : vertexBuffer(ctx, {
       .size = vertexData.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
     }) {

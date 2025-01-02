@@ -110,38 +110,30 @@ inline Vec3& sph2cart(Vec3& out, const Vec3& v) {
   return out;
 }
 
-inline float dot(const Vec3& a, const Vec3& b) {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-
+inline float dot(const Vec3& a, const Vec3& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 inline float norm(const Vec3& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
 inline float norm(const Quaternion& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]); }
 
-inline  Vec3& normalize(Vec3& out, const Vec3& v, float eps = 1e-12) {
+inline Vec3& normalize(Vec3& out, const Vec3& v, float eps = 1e-12) {
   float n = 1. / norm(v);
-  out[0] = v[0] * n;
-  out[1] = v[1] * n;
-  out[2] = v[2] * n;
+  out[0] = v[0] * n; out[1] = v[1] * n; out[2] = v[2] * n;
   return out;
 }
 
-inline  Quaternion& normalize(Quaternion& out, const Quaternion& v, float eps = 1e-12) {
+inline Quaternion& normalize(Quaternion& out, const Quaternion& v, float eps = 1e-12) {
   float n = 1. / norm(v);
-  out[0] = v[0] * n;
-  out[1] = v[1] * n;
-  out[2] = v[2] * n;
-  out[3] = v[3] * n;
+  out[0] = v[0] * n; out[1] = v[1] * n; out[2] = v[2] * n; out[3] = v[3] * n;
   return out;
 }
 
-inline  Vec3& orthogonal(Vec3& out, const Vec3& v, float m = .5, float n = .5) {
+inline Vec3& orthogonal(Vec3& out, const Vec3& v, float m = .5, float n = .5) {
   out[0] = m * -v[1] + n * -v[2];
   out[1] = m * v[0];
   out[2] = n * v[0];
   return normalize(out, out);
 }
 
-inline  Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
+inline Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
   rad *= .5;
   float s = std::sin(rad);
   quat[0] = s * axis[0];
@@ -151,7 +143,7 @@ inline  Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
   return quat;
 }
 
-inline  Quaternion& between(Quaternion& out, const Vec3& a, const Vec3& b) {
+inline Quaternion& between(Quaternion& out, const Vec3& a, const Vec3& b) {
   float w = dot(a, b);
   out[0] = a[1] * b[2] - a[2] * b[1];
   out[1] = a[2] * b[0] - a[0] * b[2];
@@ -165,7 +157,7 @@ inline  Quaternion& between(Quaternion& out, const Vec3& a, const Vec3& b) {
   return normalize(out, out);
 }
 
-inline  Quaternion& betweenZ(Quaternion& out, const Vec3& b) {
+inline Quaternion& betweenZ(Quaternion& out, const Vec3& b) {
   float w = b[2];
   out[0] = -b[1]; out[1] = b[0]; out[2] = 0.;
   out[3] = w + std::sqrt(out[0] * out[0] + out[1] * out[1] + w * w);
@@ -196,28 +188,28 @@ public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
   WGPURenderPipeline pipeline;
 
-  WGPU::Buffer vertexBuffer = WGPU::Buffer(&ctx, {
+  WGPU::Buffer vertexBuffer = WGPU::Buffer(ctx, {
     .size = vertexData.size() * sizeof(float),
     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
     });
-  WGPU::Buffer indexBuffer = WGPU::Buffer(&ctx, {
+  WGPU::Buffer indexBuffer = WGPU::Buffer(ctx, {
     .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
     });
-  WGPU::Buffer uniforms = WGPU::Buffer(&ctx, {
+  WGPU::Buffer uniforms = WGPU::Buffer(ctx, {
     .label = "camera",
     .size = sizeof(CameraUniform),
     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
     .mappedAtCreation = false,
     });
-  WGPU::Buffer model = WGPU::Buffer(&ctx, {
+  WGPU::Buffer model = WGPU::Buffer(ctx, {
     .label = "model",
     .size = 16 * sizeof(float),
     .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
     .mappedAtCreation = false,
     });
 
-  WGPU::BindGroup bindGroup = WGPU::BindGroup(&ctx, "camera", {
+  WGPU::BindGroup bindGroup = WGPU::BindGroup(ctx, "camera", {
     {
       .binding = 0,
       .buffer = &uniforms,
