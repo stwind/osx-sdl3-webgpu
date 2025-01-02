@@ -7,8 +7,7 @@ on:
     branches: ["main"]
 
 env:
-  CMAKE_VERSION: v3.31.3
-  CMAKE: cmake-${CMAKE_VERSION}-linux-x86_64/bin/cmake
+  CMAKE_VERSION: 3.31.3
 
 jobs:
   build:
@@ -21,4 +20,4 @@ jobs:
 
       - name: Install cmake
         run: |
-          wget -qc https://github.com/Kitware/CMake/releases/download/${{ env.CMAKE_VERSION }}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64.tar.gz
+          wget -qc --show-progress https://github.com/Kitware/CMake/releases/download/v${{ env.CMAKE_VERSION }}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64.tar.gz
