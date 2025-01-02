@@ -45,3 +45,25 @@ void ImGui_render(WGPU::Context& ctx, WGPUTextureView view) {
   ctx.queueSubmit(1, &command);
   wgpuCommandBufferRelease(command);
 };
+
+WGPUCommandBuffer ImGui_command(WGPU::Context& ctx, WGPUTextureView view) {
+  WGPUCommandEncoderDescriptor encoderDescriptor{};
+  WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
+
+  WGPURenderPassColorAttachment attachment{
+    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+    .loadOp = WGPULoadOp_Load,
+    .storeOp = WGPUStoreOp_Store,
+    .view = view,
+  };
+  WGPURenderPassDescriptor passDescriptor{
+    .colorAttachmentCount = 1,
+    .colorAttachments = &attachment,
+  };
+  WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
+  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass.handle);
+  pass.end();
+
+  WGPUCommandBufferDescriptor commandDescriptor{};
+  return encoder.finish(&commandDescriptor);
+};

@@ -186,6 +186,14 @@ namespace WGPU {
     void present() {
       wgpuSurfacePresent(surface);
     }
+
+    void submitCommands(const std::vector<WGPUCommandBuffer>& commands) {
+      return queueSubmit(commands.size(), commands.data());
+    }
+
+    void releaseCommands(const std::vector<WGPUCommandBuffer>& commands) {
+      for (auto& c : commands) wgpuCommandBufferRelease(c);
+    }
   };
 
   class Buffer {

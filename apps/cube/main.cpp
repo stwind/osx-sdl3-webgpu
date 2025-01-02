@@ -503,31 +503,10 @@ public:
     }
     ImGui::Render();
 
-    {
-      WGPUCommandEncoderDescriptor encoderDescriptor{};
-      WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
+    commands.push_back(ImGui_command(ctx, view));
 
-      WGPURenderPassColorAttachment attachment{
-        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-        .loadOp = WGPULoadOp_Load,
-        .storeOp = WGPUStoreOp_Store,
-        .view = view,
-      };
-      WGPURenderPassDescriptor passDescriptor{
-        .colorAttachmentCount = 1,
-        .colorAttachments = &attachment,
-      };
-      WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
-
-      ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass.handle);
-      pass.end();
-
-      WGPUCommandBufferDescriptor commandDescriptor{};
-      commands.push_back(encoder.finish(&commandDescriptor));
-    }
-
-    ctx.queueSubmit(commands.size(), commands.data());
-    for (auto& c : commands) wgpuCommandBufferRelease(c);
+    ctx.submitCommands(commands);
+    ctx.releaseCommands(commands);
 
     ctx.present();
     ctx.surfaceTextureViewRelease(view);
