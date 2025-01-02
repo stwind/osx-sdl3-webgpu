@@ -27,4 +27,5 @@ jobs:
       - name: Configure and build
         working-directory: tests
         run: |
-          $GITHUB_WORKSPACE/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --version
+          $GITHUB_WORKSPACE/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake -B build
+          $GITHUB_WORKSPACE/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --build build -j
