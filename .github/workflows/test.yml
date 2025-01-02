@@ -16,4 +16,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install cmake
-        run: sudo apt-get install -yqq cmake
+        run: apt-get -yqq update && apt-get -yqq install cmake
