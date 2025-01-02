@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: ["main"]
 
+env:
+  CMAKE_VERSION: v3.31.3
+  CMAKE: cmake-${CMAKE_VERSION}-linux-x86_64/bin/cmake
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install cmake
-        run: which wget
-        # run: |
-        #   sudo apt-get -yqq update
-        #   sudo apt-get -yqq install cmake
+        run: |
+          wget -qc https://github.com/Kitware/CMake/releases/download/${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
+          tar xzf cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
+          ${CMAKE} --version
