@@ -183,14 +183,20 @@ inline  Mat44& rotation(Mat44& mat, const Quaternion& quat) {
   return mat;
 }
 
-class Geometry {
+class Cube {
   WGPU::Context& ctx;
 public:
   WGPU::Buffer vertexBuffer;
   WGPU::Buffer indexBuffer;
+  WGPUPrimitiveState primitive{
+    .topology = WGPUPrimitiveTopology_TriangleList,
+    .stripIndexFormat = WGPUIndexFormat_Undefined,
+    .frontFace = WGPUFrontFace_CCW,
+    .cullMode = WGPUCullMode_Back,
+  };
   std::vector<WGPUVertexBufferLayout> layouts;
 
-  Geometry(WGPU::Context& ctx) : ctx(ctx),
+  Cube(WGPU::Context& ctx) : ctx(ctx),
     vertexBuffer(WGPU::Buffer(ctx, {
       .size = vertexData.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
@@ -198,7 +204,8 @@ public:
       indexBuffer(WGPU::Buffer(ctx, {
         .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-        })) {
+        }))
+  {
     vertexBuffer.write(vertexData.data());
     indexBuffer.write(indexData.data());
 
@@ -214,13 +221,6 @@ public:
     };
   }
 
-  WGPUVertexBufferLayout* vertexBufferLayouts() {
-    int n = layouts.size();
-    WGPUVertexBufferLayout* bufferLayouts = new WGPUVertexBufferLayout[n];
-    for (int i = 0; i < n; i++) bufferLayouts[i] = layouts[i];
-    return bufferLayouts;
-  }
-
   void draw(WGPURenderPassEncoder* pass) {
     wgpuRenderPassEncoderSetVertexBuffer(*pass, 0, vertexBuffer.buf, 0, vertexBuffer.size);
     wgpuRenderPassEncoderSetIndexBuffer(*pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, indexBuffer.size);
@@ -228,11 +228,76 @@ public:
   }
 };
 
+class RenderPipeline {
+  WGPU::Context& ctx;
+public:
+  struct Descriptor {
+    const char* source;
+    std::vector<WGPU::BindGroup*>const& bindGroups;
+    struct {
+      char const* entryPoint;
+      std::vector<WGPUVertexBufferLayout>const& layouts;
+    } vertex;
+    WGPUPrimitiveState primitive;
+    struct {
+      char const* entryPoint;
+      std::vector<WGPUColorTargetState>const& targets;
+    } fragment;
+    WGPUMultisampleState multisample;
+  };
+
+  WGPURenderPipeline pipeline;
+
+  RenderPipeline(WGPU::Context& ctx, Descriptor desc) : ctx(ctx) {
+    WGPUShaderModule shaderModule = ctx.createShaderModule(desc.source);
+
+    size_t bindGroupLayoutCount = desc.bindGroups.size();
+    WGPUBindGroupLayout* bindGroupLayouts = new WGPUBindGroupLayout[bindGroupLayoutCount];
+    for (int i = 0; i < bindGroupLayoutCount;i++) bindGroupLayouts[i] = desc.bindGroups[i]->layout;
+
+    size_t bufferCount = desc.vertex.layouts.size();
+    WGPUVertexBufferLayout* buffers = new WGPUVertexBufferLayout[bufferCount];
+    for (int i = 0; i < bufferCount; i++) buffers[i] = desc.vertex.layouts[i];
+
+    size_t targetCount = desc.fragment.targets.size();
+    WGPUColorTargetState* targets = new WGPUColorTargetState[targetCount];
+    for (int i = 0; i < targetCount; i++) targets[i] = desc.fragment.targets[i];
+
+    WGPUPipelineLayoutDescriptor lDescriptor{
+      .bindGroupLayoutCount = bindGroupLayoutCount,
+      .bindGroupLayouts = bindGroupLayouts,
+    };
+    WGPURenderPipelineDescriptor pDescriptor{
+      .layout = ctx.createPipelineLayout(&lDescriptor),
+      .vertex = {
+        .module = shaderModule,
+        .bufferCount = bufferCount,
+        .buffers = buffers,
+        .entryPoint = desc.vertex.entryPoint
+      },
+      .primitive = desc.primitive,
+      .fragment = new WGPUFragmentState{
+        .module = shaderModule,
+        .entryPoint = desc.fragment.entryPoint,
+        .targetCount = targetCount,
+        .targets = targets,
+      },
+      .multisample = desc.multisample,
+    };
+    pipeline = ctx.createRenderPipeline(&pDescriptor);
+
+    wgpuShaderModuleRelease(shaderModule);
+
+    delete[] bindGroupLayouts;
+    delete[] buffers;
+    delete[] targets;
+  }
+};
+
 class Application {
 public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
-  WGPURenderPipeline pipeline;
-  Geometry geom = Geometry(ctx);
+  Cube cube = Cube(ctx);
 
   WGPU::Buffer uniforms = WGPU::Buffer(ctx, {
     .label = "camera",
@@ -272,6 +337,42 @@ public:
     }
     });
 
+  RenderPipeline pipeline = RenderPipeline(ctx, RenderPipeline::Descriptor{
+    .source = shaderSource,
+    .bindGroups = {&bindGroup},
+    .vertex = {
+      .entryPoint = "vs",
+      .layouts = cube.layouts,
+    },
+    .primitive = cube.primitive,
+    .fragment = {
+      .entryPoint = "fs",
+      .targets = {
+        {
+          .format = ctx.surfaceFormat,
+          .blend = std::make_unique<WGPUBlendState>(WGPUBlendState{
+            .color = {
+              .srcFactor = WGPUBlendFactor_SrcAlpha,
+              .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+              .operation = WGPUBlendOperation_Add
+            },
+            .alpha = {
+              .srcFactor = WGPUBlendFactor_Zero,
+              .dstFactor = WGPUBlendFactor_One,
+              .operation = WGPUBlendOperation_Add
+            }
+          }).get(),
+          .writeMask = WGPUColorWriteMask_All
+        }
+      }
+    },
+    .multisample = {
+      .count = 1,
+      .mask = ~0u,
+      .alphaToCoverageEnabled = false
+    }
+    });
+
   struct {
     bool isDown = false;
     ImVec2 downPos = { -1,-1 };
@@ -283,57 +384,6 @@ public:
 
   Application() {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
-
-    WGPUShaderModule shaderModule = ctx.createShaderModule(shaderSource);
-    pipeline = ctx.createRenderPipeline(new WGPURenderPipelineDescriptor{
-      .layout = ctx.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
-        .bindGroupLayoutCount = 1,
-        .bindGroupLayouts = &bindGroup.layout,
-      }),
-      .vertex = {
-        .bufferCount = geom.layouts.size(),
-        .buffers = geom.vertexBufferLayouts(),
-        .module = shaderModule,
-        .entryPoint = "vs",
-        .constantCount = 0,
-      },
-      .primitive = {
-        .topology = WGPUPrimitiveTopology_TriangleList,
-        .stripIndexFormat = WGPUIndexFormat_Undefined,
-        .frontFace = WGPUFrontFace_CCW,
-        .cullMode = WGPUCullMode_Back,
-      },
-      .fragment = new WGPUFragmentState{
-        .module = shaderModule,
-        .entryPoint = "fs",
-        .constantCount = 0,
-        .targetCount = 1,
-        .targets = new WGPUColorTargetState[1]{
-          {
-            .format = ctx.surfaceFormat,
-            .blend = new WGPUBlendState{
-              .color = {
-                .srcFactor = WGPUBlendFactor_SrcAlpha,
-                .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-                .operation = WGPUBlendOperation_Add
-              },
-              .alpha = {
-                .srcFactor = WGPUBlendFactor_Zero,
-                .dstFactor = WGPUBlendFactor_One,
-                .operation = WGPUBlendOperation_Add
-              }
-            },
-            .writeMask = WGPUColorWriteMask_All
-          }
-        }
-      },
-      .multisample = {
-        .count = 1,
-        .mask = ~0u,
-        .alphaToCoverageEnabled = false
-      }
-      });
-    wgpuShaderModuleRelease(shaderModule);
 
     CameraUniform uniformData{
       .view = std::array<float, 16>{
@@ -348,7 +398,6 @@ public:
   }
 
   ~Application() {
-    wgpuRenderPipelineRelease(pipeline);
     ImGui_ImplWGPU_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
@@ -383,9 +432,9 @@ public:
         }
         }
       });
-    wgpuRenderPassEncoderSetPipeline(pass, pipeline);
+    wgpuRenderPassEncoderSetPipeline(pass, pipeline.pipeline);
     wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.bindGroup, 0, nullptr);
-    geom.draw(&pass);
+    cube.draw(&pass);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
 

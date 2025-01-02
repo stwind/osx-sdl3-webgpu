@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <SDL3/SDL.h>
 #include <webgpu.h>
 #include <wgpu.h>
@@ -28,14 +29,15 @@ void LogOutputFunction(void* userdata, int category, SDL_LogPriority priority, c
 
 WGPUAdapter requestAdapter(WGPUSurface surface, WGPUInstance instance) {
   WGPUAdapter adapter;
-  wgpuInstanceRequestAdapter(instance, new WGPURequestAdapterOptions{
-  .compatibleSurface = surface,
-  .powerPreference = WGPUPowerPreference_HighPerformance,
-  .forceFallbackAdapter = false,
-  .backendType = WGPUBackendType_Undefined,
-    }, [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
-      if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter*)(userdata) = adapter;
-      else throw std::runtime_error(message);
+  WGPURequestAdapterOptions options{
+    .compatibleSurface = surface,
+    .powerPreference = WGPUPowerPreference_HighPerformance,
+    .forceFallbackAdapter = false,
+    .backendType = WGPUBackendType_Undefined,
+  };
+  wgpuInstanceRequestAdapter(instance, &options, [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* userdata) {
+    if (status == WGPURequestAdapterStatus_Success) *(WGPUAdapter*)(userdata) = adapter;
+    else throw std::runtime_error(message);
     }, &adapter);
   return adapter;
 };
@@ -44,19 +46,20 @@ WGPUDevice requestDevice(WGPUAdapter adapter) {
   WGPUDevice device;
   WGPUSupportedLimits supportedLimits;
   wgpuAdapterGetLimits(adapter, &supportedLimits);
-  wgpuAdapterRequestDevice(adapter, new WGPUDeviceDescriptor{
-    .requiredFeatureCount = 3,
-    .requiredFeatures = new WGPUFeatureName[3]{
+  WGPUFeatureName features[3] = {
       WGPUFeatureName_Float32Filterable,
       WGPUFeatureName_TimestampQuery,
       (WGPUFeatureName)WGPUNativeFeature_TextureAdapterSpecificFormatFeatures,
-    },
-    .requiredLimits = new WGPURequiredLimits{
-      .limits = supportedLimits.limits
-    },
-    }, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
-      if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
-      else throw std::runtime_error(message);
+  };
+  WGPURequiredLimits requiredLimits{ .limits = supportedLimits.limits };
+  WGPUDeviceDescriptor descriptor{
+    .requiredFeatureCount = 3,
+    .requiredFeatures = features,
+    .requiredLimits = &requiredLimits,
+  };
+  wgpuAdapterRequestDevice(adapter, &descriptor, [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* userdata) {
+    if (status == WGPURequestDeviceStatus_Success) *(WGPUDevice*)(userdata) = device;
+    else throw std::runtime_error(message);
     }, &device);
   return device;
 }
@@ -64,7 +67,7 @@ WGPUDevice requestDevice(WGPUAdapter adapter) {
 void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
   int bbwidth, bbheight;
   SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-  wgpuSurfaceConfigure(surface, new WGPUSurfaceConfiguration{
+  WGPUSurfaceConfiguration config{
     .device = device,
     .format = surfaceFormat,
     .usage = WGPUTextureUsage_RenderAttachment,
@@ -74,7 +77,8 @@ void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device
     .presentMode = WGPUPresentMode_Fifo,
     .width = (uint32_t)bbwidth,
     .height = (uint32_t)bbheight,
-    });
+  };
+  wgpuSurfaceConfigure(surface, &config);
 }
 
 namespace WGPU {
@@ -97,7 +101,8 @@ namespace WGPU {
       window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_METAL);
       if (window == nullptr) throw std::runtime_error("SDL_CreateWindow failed");
 
-      WGPUInstance instance = wgpuCreateInstance(new WGPUInstanceDescriptor{});
+      WGPUInstanceDescriptor descriptor;
+      WGPUInstance instance = wgpuCreateInstance(&descriptor);
       surface = SDL_GetWGPUSurface(instance, window);
       WGPUAdapter adapter = requestAdapter(surface, instance);
       wgpuInstanceRelease(instance);
@@ -131,9 +136,8 @@ namespace WGPU {
           .sType = WGPUSType_ShaderModuleWGSLDescriptor
         }
       };
-      return wgpuDeviceCreateShaderModule(device, new WGPUShaderModuleDescriptor{
-        .nextInChain = &shaderCodeDesc.chain
-        });
+      WGPUShaderModuleDescriptor descriptor{ .nextInChain = &shaderCodeDesc.chain };
+      return wgpuDeviceCreateShaderModule(device, &descriptor);
     };
 
     WGPURenderPipeline createRenderPipeline(const WGPURenderPipelineDescriptor* descripter) {
@@ -162,7 +166,7 @@ namespace WGPU {
 
     WGPUTextureView surfaceTextureCreateView() {
       wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
-      return wgpuTextureCreateView(surfaceTexture.texture, new WGPUTextureViewDescriptor{
+      WGPUTextureViewDescriptor descriptor{
         .format = wgpuTextureGetFormat(surfaceTexture.texture),
         .dimension = WGPUTextureViewDimension_2D,
         .baseMipLevel = 0,
@@ -170,7 +174,8 @@ namespace WGPU {
         .baseArrayLayer = 0,
         .arrayLayerCount = 1,
         .aspect = WGPUTextureAspect_All,
-        });
+      };
+      return wgpuTextureCreateView(surfaceTexture.texture, &descriptor);
     }
 
     void surfaceTextureViewRelease(WGPUTextureView view) {
@@ -253,12 +258,13 @@ namespace WGPU {
         .size = entries[i].buffer->size
       };
 
-      bindGroup = ctx.createBindGroup(new WGPUBindGroupDescriptor{
+      WGPUBindGroupDescriptor descriptor{
         .label = layoutSpec.label,
         .layout = layout,
         .entryCount = n,
         .entries = bindGroupEntries
-        });
+      };
+      bindGroup = ctx.createBindGroup(&descriptor);
 
       delete[] layoutEntries;
       delete[] bindGroupEntries;
