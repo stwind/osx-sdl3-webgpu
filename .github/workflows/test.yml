@@ -19,10 +19,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install cmake
-        run: wget -qc https://github.com/Kitware/CMake/releases/download/v${{ env.CMAKE_VERSION }}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64.tar.gz
+        run: |
+          pwd
+          wget -qc https://github.com/Kitware/CMake/releases/download/v${{ env.CMAKE_VERSION }}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64.tar.gz
+          tar xzf cmake-${{ env.CMAKE_VERSION }}-linux-x86_64.tar.gz
+          ls -phal
 
-      - name: check cmake
-        run: ${{ vars.GITHUB_WORKSPACE}}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --version
+    #   - name: check cmake
+    #     run: ${{ vars.GITHUB_WORKSPACE}}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --version
 
     #   - name: Configure and build
     #     working-directory: tests
