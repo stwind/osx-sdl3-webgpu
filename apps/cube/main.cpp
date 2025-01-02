@@ -183,19 +183,57 @@ inline  Mat44& rotation(Mat44& mat, const Quaternion& quat) {
   return mat;
 }
 
+class Geometry {
+  WGPU::Context& ctx;
+public:
+  WGPU::Buffer vertexBuffer;
+  WGPU::Buffer indexBuffer;
+  std::vector<WGPUVertexBufferLayout> layouts;
+
+  Geometry(WGPU::Context& ctx) : ctx(ctx),
+    vertexBuffer(WGPU::Buffer(ctx, {
+      .size = vertexData.size() * sizeof(float),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+      })),
+      indexBuffer(WGPU::Buffer(ctx, {
+        .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
+        })) {
+    vertexBuffer.write(vertexData.data());
+    indexBuffer.write(indexData.data());
+
+    layouts.resize(1);
+    layouts[0] = {
+      .attributeCount = 2,
+      .attributes = new WGPUVertexAttribute[2]{
+        {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
+        {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 3 * sizeof(float) }
+        },
+      .arrayStride = 6 * sizeof(float),
+      .stepMode = WGPUVertexStepMode_Vertex
+    };
+  }
+
+  WGPUVertexBufferLayout* vertexBufferLayouts() {
+    int n = layouts.size();
+    WGPUVertexBufferLayout* bufferLayouts = new WGPUVertexBufferLayout[n];
+    for (int i = 0; i < n; i++) bufferLayouts[i] = layouts[i];
+    return bufferLayouts;
+  }
+
+  void draw(WGPURenderPassEncoder* pass) {
+    wgpuRenderPassEncoderSetVertexBuffer(*pass, 0, vertexBuffer.buf, 0, vertexBuffer.size);
+    wgpuRenderPassEncoderSetIndexBuffer(*pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, indexBuffer.size);
+    wgpuRenderPassEncoderDrawIndexed(*pass, 36, 1, 0, 0, 0);
+  }
+};
+
 class Application {
 public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
   WGPURenderPipeline pipeline;
+  Geometry geom = Geometry(ctx);
 
-  WGPU::Buffer vertexBuffer = WGPU::Buffer(ctx, {
-    .size = vertexData.size() * sizeof(float),
-    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-    });
-  WGPU::Buffer indexBuffer = WGPU::Buffer(ctx, {
-    .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
-    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-    });
   WGPU::Buffer uniforms = WGPU::Buffer(ctx, {
     .label = "camera",
     .size = sizeof(CameraUniform),
@@ -246,9 +284,6 @@ public:
   Application() {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
 
-    vertexBuffer.write(vertexData.data());
-    indexBuffer.write(indexData.data());
-
     WGPUShaderModule shaderModule = ctx.createShaderModule(shaderSource);
     pipeline = ctx.createRenderPipeline(new WGPURenderPipelineDescriptor{
       .layout = ctx.createPipelineLayout(new WGPUPipelineLayoutDescriptor{
@@ -256,18 +291,8 @@ public:
         .bindGroupLayouts = &bindGroup.layout,
       }),
       .vertex = {
-        .bufferCount = 1,
-        .buffers = new WGPUVertexBufferLayout[1]{
-          {
-            .attributeCount = 2,
-            .attributes = new WGPUVertexAttribute[2]{
-              {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
-              {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 3 * sizeof(float) }
-            },
-            .arrayStride = 6 * sizeof(float),
-            .stepMode = WGPUVertexStepMode_Vertex
-          }
-        },
+        .bufferCount = geom.layouts.size(),
+        .buffers = geom.vertexBufferLayouts(),
         .module = shaderModule,
         .entryPoint = "vs",
         .constantCount = 0,
@@ -345,6 +370,7 @@ public:
     WGPUTextureView view = ctx.surfaceTextureCreateView();
 
     WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
+
     WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
       .colorAttachmentCount = 1,
       .colorAttachments = new WGPURenderPassColorAttachment[1]{
@@ -358,12 +384,11 @@ public:
         }
       });
     wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, vertexBuffer.size);
-    wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, indexBuffer.size);
     wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.bindGroup, 0, nullptr);
-    wgpuRenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
+    geom.draw(&pass);
     wgpuRenderPassEncoderEnd(pass);
     wgpuRenderPassEncoderRelease(pass);
+
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
     wgpuCommandEncoderRelease(encoder);
     ctx.queueSubmit(1, &command);
