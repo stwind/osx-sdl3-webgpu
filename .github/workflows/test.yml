@@ -24,8 +24,12 @@ jobs:
           tar xzf cmake-${{ env.CMAKE_VERSION }}-linux-x86_64.tar.gz
           cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --version
 
-      - name: Configure and build
+      - name: Configure and build tests
         working-directory: tests
         run: |
           $GITHUB_WORKSPACE/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake -B build
           $GITHUB_WORKSPACE/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --build build -j
+
+      - name: Run tests
+        working-directory: tests
+        run: $GITHUB_WORKSPACE/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/ctest --test-dir build
