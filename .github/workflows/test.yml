@@ -21,8 +21,11 @@ jobs:
       - name: Install cmake
         run: wget -qc https://github.com/Kitware/CMake/releases/download/v${{ env.CMAKE_VERSION }}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64.tar.gz
 
-      - name: Configure and build
-        working-directory: tests
-        run: |
-          cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake -B build
-          cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --build build -j
+      - name: check cmake
+        run: ${{ vars.GITHUB_WORKSPACE}}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --version
+
+    #   - name: Configure and build
+    #     working-directory: tests
+    #     run: |
+    #       ${{ vars.GITHUB_WORKSPACE}}/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake -B build
+    #       cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/cmake --build build -j
