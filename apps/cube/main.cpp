@@ -221,10 +221,10 @@ public:
     };
   }
 
-  void draw(WGPURenderPassEncoder* pass) {
-    wgpuRenderPassEncoderSetVertexBuffer(*pass, 0, vertexBuffer.buf, 0, vertexBuffer.size);
-    wgpuRenderPassEncoderSetIndexBuffer(*pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, indexBuffer.size);
-    wgpuRenderPassEncoderDrawIndexed(*pass, 36, 1, 0, 0, 0);
+  void draw(const WGPURenderPassEncoder& pass) {
+    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, vertexBuffer.size);
+    wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, indexBuffer.size);
+    wgpuRenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
   }
 };
 
@@ -303,40 +303,45 @@ public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
   Cube cube = Cube(ctx);
 
-  WGPU::Buffer uniforms = WGPU::Buffer(ctx, {
-    .label = "camera",
-    .size = sizeof(CameraUniform),
-    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-    .mappedAtCreation = false,
-    });
-  WGPU::Buffer model = WGPU::Buffer(ctx, {
-    .label = "model",
-    .size = 16 * sizeof(float),
-    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-    .mappedAtCreation = false,
-    });
+  struct {
+    WGPU::Buffer camera;
+    WGPU::Buffer model;
+  } uniforms = {
+    .camera = WGPU::Buffer(ctx, {
+      .label = "camera",
+      .size = sizeof(CameraUniform),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+      .mappedAtCreation = false,
+      }),
+    .model = WGPU::Buffer(ctx, {
+      .label = "model",
+      .size = 16 * sizeof(float),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+      .mappedAtCreation = false,
+      })
+  };
 
   WGPU::BindGroup bindGroup = WGPU::BindGroup(ctx, "camera", {
     {
       .binding = 0,
-      .buffer = &uniforms,
+      .buffer = &uniforms.camera,
       .offset = 0,
       .visibility = WGPUShaderStage_Vertex,
       .layout = {
         .type = WGPUBufferBindingType_Uniform,
         .hasDynamicOffset = false,
-        .minBindingSize = uniforms.size,
+        .minBindingSize = uniforms.camera.size,
       }
     },
     {
       .binding = 1,
-      .buffer = &model,
+      .buffer = &uniforms.model,
       .offset = 0,
       .visibility = WGPUShaderStage_Vertex,
       .layout = {
         .type = WGPUBufferBindingType_Uniform,
         .hasDynamicOffset = false,
-        .minBindingSize = model.size,
+        .minBindingSize = uniforms.model.size,
       }
     }
     });
@@ -398,7 +403,7 @@ public:
       },
       .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
     };
-    uniforms.write(&uniformData);
+    uniforms.camera.write(&uniformData);
   }
 
   ~Application() {
@@ -418,9 +423,10 @@ public:
 
     Mat44 m;
     rotation(m, rot);
-    model.write(&m);
+    uniforms.model.write(&m);
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
+    std::vector<WGPUCommandBuffer> commands;
 
     {
       WGPUCommandEncoderDescriptor encoderDescriptor{};
@@ -439,21 +445,19 @@ public:
       WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
       wgpuRenderPassEncoderSetPipeline(pass, pipeline.handle);
       wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.handle, 0, nullptr);
-      cube.draw(&pass);
+      cube.draw(pass);
       wgpuRenderPassEncoderEnd(pass);
       wgpuRenderPassEncoderRelease(pass);
 
       WGPUCommandBufferDescriptor commandDescriptor{};
-      WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &commandDescriptor);
+      commands.push_back(wgpuCommandEncoderFinish(encoder, &commandDescriptor));
       wgpuCommandEncoderRelease(encoder);
-      ctx.queueSubmit(1, &command);
-      wgpuCommandBufferRelease(command);
     }
 
-    ImGuiIO& io = ImGui::GetIO();
     ImGui_ImplWGPU_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+    ImGuiIO& io = ImGui::GetIO();
 
     if (state.isDown != ImGui::IsMouseDown(0)) {
       if (!state.isDown) {
@@ -499,7 +503,33 @@ public:
       ImGui::End();
     }
     ImGui::Render();
-    ImGui_render(ctx, view);
+
+    {
+      WGPUCommandEncoderDescriptor encoderDescriptor{};
+      WGPUCommandEncoder encoder = ctx.createCommandEncoder(&encoderDescriptor);
+
+      WGPURenderPassColorAttachment attachment{
+        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+        .loadOp = WGPULoadOp_Load,
+        .storeOp = WGPUStoreOp_Store,
+        .view = view,
+      };
+      WGPURenderPassDescriptor passDescriptor{
+        .colorAttachmentCount = 1,
+        .colorAttachments = &attachment,
+      };
+      WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
+      ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
+      wgpuRenderPassEncoderEnd(pass);
+      wgpuRenderPassEncoderRelease(pass);
+
+      WGPUCommandBufferDescriptor commandDescriptor{};
+      commands.push_back(wgpuCommandEncoderFinish(encoder, &commandDescriptor));
+      wgpuCommandEncoderRelease(encoder);
+    }
+
+    ctx.queueSubmit(commands.size(), commands.data());
+    for (auto& c : commands) wgpuCommandBufferRelease(c);
 
     ctx.present();
     ctx.surfaceTextureViewRelease(view);
