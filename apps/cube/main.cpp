@@ -532,20 +532,57 @@ public:
     WGPUTextureView view = ctx.surfaceTextureCreateView();
     std::vector<WGPUCommandBuffer> commands;
 
+    WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
+
+    WGPUTextureDescriptor depthTextureDesc{
+      .dimension = WGPUTextureDimension_2D,
+      .format = depthTextureFormat,
+      .mipLevelCount = 1,
+      .sampleCount = 1,
+      .size = { 1280, 720, 1 },
+      .usage = WGPUTextureUsage_RenderAttachment,
+      .viewFormatCount = 1,
+      .viewFormats = &depthTextureFormat,
+    };
+    WGPUTexture depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
+
+    WGPUTextureViewDescriptor depthTextureViewDesc{
+      .aspect = WGPUTextureAspect_DepthOnly,
+      .baseArrayLayer = 0,
+      .arrayLayerCount = 1,
+      .baseMipLevel = 0,
+      .mipLevelCount = 1,
+      .dimension = WGPUTextureViewDimension_2D,
+      .format = depthTextureFormat,
+    };
+    WGPUTextureView depthTextureView = wgpuTextureCreateView(depthTexture, &depthTextureViewDesc);
+
     {
       WGPUCommandEncoderDescriptor encoderDescriptor{};
       WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
 
-      WGPURenderPassColorAttachment attachment{
+      WGPURenderPassColorAttachment colorAttachment{
        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
        .view = view,
        .loadOp = WGPULoadOp_Clear,
        .storeOp = WGPUStoreOp_Store,
        .clearValue = WGPUColor{ 0., 0., 0., 1. }
       };
+      WGPURenderPassDepthStencilAttachment depthStencilAttachment{
+        .view = depthTextureView,
+        .depthClearValue = 1.0f,
+        .depthLoadOp = WGPULoadOp_Clear,
+        .depthStoreOp = WGPUStoreOp_Store,
+        .depthReadOnly = false,
+        .stencilClearValue = 0,
+        .stencilLoadOp = WGPULoadOp_Clear,
+        .stencilStoreOp = WGPUStoreOp_Store,
+        .stencilReadOnly = true,
+      };
       WGPURenderPassDescriptor passDescriptor{
         .colorAttachmentCount = 1,
-        .colorAttachments = &attachment
+        .colorAttachments = &colorAttachment,
+        .depthStencilAttachment = &depthStencilAttachment,
       };
       WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
       gnomon.draw(pass);
@@ -612,6 +649,10 @@ public:
 
     ctx.present();
     ctx.surfaceTextureViewRelease(view);
+
+    wgpuTextureViewRelease(depthTextureView);
+    wgpuTextureDestroy(depthTexture);
+    wgpuTextureRelease(depthTexture);
   }
 };
 

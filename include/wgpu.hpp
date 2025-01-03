@@ -353,6 +353,28 @@ namespace WGPU {
         .targetCount = desc.fragment.targets.size(),
         .targets = desc.fragment.targets.data(),
       };
+      WGPUDepthStencilState depthStencilState{
+        .format = WGPUTextureFormat_Depth24Plus,
+        .depthWriteEnabled = true,
+        .depthCompare = WGPUCompareFunction_Less,
+        .stencilReadMask = 0,
+        .stencilWriteMask = 0,
+        .depthBias = 0,
+        .depthBiasSlopeScale = 0,
+        .depthBiasClamp = 0,
+        .stencilFront = {
+          .compare = WGPUCompareFunction_Always,
+          .failOp = WGPUStencilOperation_Keep,
+          .depthFailOp = WGPUStencilOperation_Keep,
+          .passOp = WGPUStencilOperation_Keep,
+        },
+        .stencilBack = {
+          .compare = WGPUCompareFunction_Always,
+          .failOp = WGPUStencilOperation_Keep,
+          .depthFailOp = WGPUStencilOperation_Keep,
+          .passOp = WGPUStencilOperation_Keep,
+        }
+      };
       WGPURenderPipelineDescriptor pDescriptor{
         .layout = ctx.createPipelineLayout(&lDescriptor),
         .vertex = {
@@ -363,6 +385,7 @@ namespace WGPU {
         },
         .primitive = desc.primitive,
         .fragment = &fragmentState,
+        .depthStencil = &depthStencilState,
         .multisample = desc.multisample,
       };
       handle = ctx.createRenderPipeline(&pDescriptor);
