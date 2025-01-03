@@ -20,32 +20,6 @@ bool ImGui_init(WGPU::Context* ctx) {
   return ImGui_ImplWGPU_Init(&init_info);
 };
 
-void ImGui_render(WGPU::Context& ctx, WGPUTextureView view) {
-  WGPUCommandEncoderDescriptor encoderDescriptor{};
-  WGPUCommandEncoder encoder = ctx.createCommandEncoder(&encoderDescriptor);
-
-  WGPURenderPassColorAttachment attachment{
-    .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-    .loadOp = WGPULoadOp_Load,
-    .storeOp = WGPUStoreOp_Store,
-    .view = view,
-  };
-  WGPURenderPassDescriptor passDescriptor{
-    .colorAttachmentCount = 1,
-    .colorAttachments = &attachment,
-  };
-  WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &passDescriptor);
-  ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), pass);
-  wgpuRenderPassEncoderEnd(pass);
-  wgpuRenderPassEncoderRelease(pass);
-
-  WGPUCommandBufferDescriptor commandDescriptor{};
-  WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &commandDescriptor);
-  wgpuCommandEncoderRelease(encoder);
-  ctx.queueSubmit(1, &command);
-  wgpuCommandBufferRelease(command);
-};
-
 WGPUCommandBuffer ImGui_command(WGPU::Context& ctx, WGPUTextureView view) {
   WGPUCommandEncoderDescriptor encoderDescriptor{};
   WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);

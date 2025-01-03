@@ -147,11 +147,11 @@ public:
       WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
 
       WGPURenderPassColorAttachment attachment{
-      .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-      .view = view,
-      .loadOp = WGPULoadOp_Clear,
-      .storeOp = WGPUStoreOp_Store,
-      .clearValue = WGPUColor{ 0., 0., 0., 1. }
+        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+        .view = view,
+        .loadOp = WGPULoadOp_Clear,
+        .storeOp = WGPUStoreOp_Store,
+        .clearValue = WGPUColor{ 0., 0., 0., 1. }
       };
       WGPURenderPassDescriptor passDescriptor{
         .colorAttachmentCount = 1,
