@@ -196,6 +196,13 @@ namespace WGPU {
     }
   };
 
+  class ShaderModule {
+  public:
+    WGPUShaderModule handle;
+    ShaderModule(Context& ctx, const char* source) : handle(ctx.createShaderModule(source)) {}
+    ~ShaderModule() { wgpuShaderModuleRelease(handle); }
+  };
+
   class Buffer {
   private:
     Context& ctx;
@@ -220,27 +227,24 @@ namespace WGPU {
     }
   };
 
-  struct BindGroupEntry {
-    uint32_t binding;
-    Buffer* buffer;
-    uint64_t offset;
-    WGPUShaderStageFlags visibility;
-    WGPUBufferBindingLayout layout;
-    WGPUSamplerBindingLayout sampler;
-    WGPUTextureBindingLayout texture;
-    WGPUStorageTextureBindingLayout storageTexture;
-  };
-
   class BindGroup {
-  private:
-    Context& ctx;
-
   public:
+    struct Entry {
+      uint32_t binding;
+      Buffer* buffer;
+      uint64_t offset;
+      WGPUShaderStageFlags visibility;
+      WGPUBufferBindingLayout layout;
+      WGPUSamplerBindingLayout sampler;
+      WGPUTextureBindingLayout texture;
+      WGPUStorageTextureBindingLayout storageTexture;
+    };
+
     WGPUBindGroup handle;
     WGPUBindGroupLayout layout;
     WGPUBindGroupLayoutDescriptor layoutSpec;
 
-    BindGroup(Context& ctx, const char* label, const std::vector<BindGroupEntry>& entries) : ctx(ctx) {
+    BindGroup(Context& ctx, const char* label, const std::vector<Entry>& entries) {
       size_t n = entries.size();
 
       WGPUBindGroupLayoutEntry* layoutEntries = new WGPUBindGroupLayoutEntry[n];
@@ -292,10 +296,97 @@ namespace WGPU {
     WGPUVertexStepMode stepMode;
   };
 
+  class RenderPipeline {
+  public:
+    struct BindGroupEntry {
+      const char* label;
+      const std::vector<BindGroup::Entry>& entries;
+    };
+
+    struct Descriptor {
+      const char* source;
+      std::vector<BindGroupEntry>const& bindGroups;
+      struct {
+        char const* entryPoint;
+        std::vector<VertexBuffer>const& buffers;
+      } vertex;
+      WGPUPrimitiveState primitive;
+      struct {
+        char const* entryPoint;
+        std::vector<WGPUColorTargetState>const& targets;
+      } fragment;
+      WGPUMultisampleState multisample;
+    };
+
+    WGPURenderPipeline handle;
+    std::vector<BindGroup> bindGroups;
+
+    RenderPipeline(WGPU::Context& ctx, Descriptor desc) {
+      WGPU::ShaderModule shaderModule(ctx, desc.source);
+
+      size_t bindGroupLayoutCount = desc.bindGroups.size();
+      WGPUBindGroupLayout* bindGroupLayouts = new WGPUBindGroupLayout[bindGroupLayoutCount];
+      for (int i = 0; i < bindGroupLayoutCount; i++) {
+        bindGroups.emplace_back(ctx, desc.bindGroups[i].label, desc.bindGroups[i].entries);
+        bindGroupLayouts[i] = bindGroups[i].layout;
+      }
+
+      size_t bufferCount = desc.vertex.buffers.size();
+      WGPUVertexBufferLayout* buffers = new WGPUVertexBufferLayout[bufferCount];
+      for (int i = 0; i < bufferCount; i++) {
+        auto& buf = desc.vertex.buffers[i];
+        buffers[i] = {
+          .attributeCount = buf.attributes.size(),
+          .attributes = buf.attributes.data(),
+          .arrayStride = buf.arrayStride,
+          .stepMode = buf.stepMode,
+        };
+      }
+
+      WGPUPipelineLayoutDescriptor lDescriptor{
+        .bindGroupLayoutCount = bindGroupLayoutCount,
+        .bindGroupLayouts = bindGroupLayouts,
+      };
+      WGPUFragmentState fragmentState{
+        .module = shaderModule.handle,
+        .entryPoint = desc.fragment.entryPoint,
+        .targetCount = desc.fragment.targets.size(),
+        .targets = desc.fragment.targets.data(),
+      };
+      WGPURenderPipelineDescriptor pDescriptor{
+        .layout = ctx.createPipelineLayout(&lDescriptor),
+        .vertex = {
+          .module = shaderModule.handle,
+          .bufferCount = bufferCount,
+          .buffers = buffers,
+          .entryPoint = desc.vertex.entryPoint
+        },
+        .primitive = desc.primitive,
+        .fragment = &fragmentState,
+        .multisample = desc.multisample,
+      };
+      handle = ctx.createRenderPipeline(&pDescriptor);
+
+      delete[] bindGroupLayouts;
+      delete[] buffers;
+    }
+
+    ~RenderPipeline() {
+      wgpuRenderPipelineRelease(handle);
+    }
+  };
+
+  struct Geometry {
+    WGPUPrimitiveState primitive;
+    std::vector<VertexBuffer> vertexBuffers;
+    uint32_t count;
+  };
+
   struct IndexedGeometry {
     WGPUPrimitiveState primitive;
     std::vector<VertexBuffer> vertexBuffers;
-    WGPU::Buffer indexBuffer;
+    WGPU::Buffer& indexBuffer;
+    uint32_t count;
   };
 
   class RenderPass {
@@ -310,12 +401,19 @@ namespace WGPU {
       wgpuRenderPassEncoderRelease(handle);
     }
 
-    void draw(IndexedGeometry& geom, uint32_t indexCount, uint32_t instanceCount = 1,
-      uint32_t firstIndex = 0, int32_t baseVertex = 0, uint32_t firstInstance = 0) {
-      for (auto& vb : geom.vertexBuffers)
-        wgpuRenderPassEncoderSetVertexBuffer(handle, 0, vb.buffer.handle, 0, vb.buffer.size);
+    void setPipeline(RenderPipeline& pipeline) {
+      wgpuRenderPassEncoderSetPipeline(handle, pipeline.handle);
+      for (int i = 0, n = pipeline.bindGroups.size(); i < n; i++)
+        wgpuRenderPassEncoderSetBindGroup(handle, i, pipeline.bindGroups[i].handle, 0, nullptr);
+    }
+
+    void draw(IndexedGeometry& geom, uint32_t instanceCount = 1, uint32_t firstIndex = 0, int32_t baseVertex = 0, uint32_t firstInstance = 0) {
+      for (int i = 0; i < geom.vertexBuffers.size(); i++) {
+        auto& buf = geom.vertexBuffers[i].buffer;
+        wgpuRenderPassEncoderSetVertexBuffer(handle, i, buf.handle, 0, buf.size);
+      }
       wgpuRenderPassEncoderSetIndexBuffer(handle, geom.indexBuffer.handle, WGPUIndexFormat_Uint16, 0, geom.indexBuffer.size);
-      wgpuRenderPassEncoderDrawIndexed(handle, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+      wgpuRenderPassEncoderDrawIndexed(handle, geom.count, instanceCount, firstIndex, baseVertex, firstInstance);
     }
 
     void end() {
