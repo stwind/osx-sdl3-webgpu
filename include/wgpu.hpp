@@ -209,16 +209,13 @@ namespace WGPU {
       : ctx(ctx), spec(spec) {
       handle = ctx.createBuffer(&spec);
       size = wgpuBufferGetSize(handle);
-      // SDL_Log("created %p,%d", handle, (int)spec.size);
     }
 
     ~Buffer() {
-      // SDL_Log("bye: %p", handle);
       wgpuBufferRelease(handle);
     }
 
     void write(const void* data, uint64_t offset = 0) {
-      // SDL_Log("writing: %p", handle);
       ctx.writeBuffer(handle, offset, data, size);
     }
   };
@@ -288,6 +285,19 @@ namespace WGPU {
     }
   };
 
+  struct VertexBuffer {
+    WGPU::Buffer& buffer;
+    std::vector<WGPUVertexAttribute> attributes;
+    uint64_t arrayStride;
+    WGPUVertexStepMode stepMode;
+  };
+
+  struct IndexedGeometry {
+    WGPUPrimitiveState primitive;
+    std::vector<VertexBuffer> vertexBuffers;
+    WGPU::Buffer indexBuffer;
+  };
+
   class RenderPass {
   public:
     WGPURenderPassEncoder handle;
@@ -298,6 +308,14 @@ namespace WGPU {
 
     ~RenderPass() {
       wgpuRenderPassEncoderRelease(handle);
+    }
+
+    void draw(IndexedGeometry& geom, uint32_t indexCount, uint32_t instanceCount = 1,
+      uint32_t firstIndex = 0, int32_t baseVertex = 0, uint32_t firstInstance = 0) {
+      for (auto& vb : geom.vertexBuffers)
+        wgpuRenderPassEncoderSetVertexBuffer(handle, 0, vb.buffer.handle, 0, vb.buffer.size);
+      wgpuRenderPassEncoderSetIndexBuffer(handle, geom.indexBuffer.handle, WGPUIndexFormat_Uint16, 0, geom.indexBuffer.size);
+      wgpuRenderPassEncoderDrawIndexed(handle, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
     }
 
     void end() {

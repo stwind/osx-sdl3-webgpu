@@ -183,18 +183,18 @@ inline  Mat44& rotation(Mat44& mat, const Quaternion& quat) {
   return mat;
 }
 
-struct VertexBuffer {
-  WGPU::Buffer& buffer;
-  std::vector<WGPUVertexAttribute> attributes;
-  uint64_t arrayStride;
-  WGPUVertexStepMode stepMode;
-};
+// struct VertexBuffer {
+//   WGPU::Buffer& buffer;
+//   std::vector<WGPUVertexAttribute> attributes;
+//   uint64_t arrayStride;
+//   WGPUVertexStepMode stepMode;
+// };
 
-struct IndexedGeometry {
-  WGPUPrimitiveState primitive;
-  std::vector<VertexBuffer> vertexBuffers;
-  WGPU::Buffer indexBuffer;
-};
+// struct IndexedGeometry {
+//   WGPUPrimitiveState primitive;
+//   std::vector<VertexBuffer> vertexBuffers;
+//   WGPU::Buffer indexBuffer;
+// };
 
 class RenderPipeline {
   WGPU::Context& ctx;
@@ -204,7 +204,7 @@ public:
     std::vector<WGPU::BindGroup*>const& bindGroups;
     struct {
       char const* entryPoint;
-      std::vector<VertexBuffer>const& buffers;
+      std::vector<WGPU::VertexBuffer>const& buffers;
     } vertex;
     WGPUPrimitiveState primitive;
     struct {
@@ -235,10 +235,6 @@ public:
       };
     }
 
-    size_t targetCount = desc.fragment.targets.size();
-    WGPUColorTargetState* targets = new WGPUColorTargetState[targetCount];
-    for (int i = 0; i < targetCount; i++) targets[i] = desc.fragment.targets[i];
-
     WGPUPipelineLayoutDescriptor lDescriptor{
       .bindGroupLayoutCount = bindGroupLayoutCount,
       .bindGroupLayouts = bindGroupLayouts,
@@ -246,8 +242,8 @@ public:
     WGPUFragmentState fragmentState{
       .module = shaderModule,
       .entryPoint = desc.fragment.entryPoint,
-      .targetCount = targetCount,
-      .targets = targets,
+      .targetCount = desc.fragment.targets.size(),
+      .targets = desc.fragment.targets.data(),
     };
     WGPURenderPipelineDescriptor pDescriptor{
       .layout = ctx.createPipelineLayout(&lDescriptor),
@@ -266,7 +262,6 @@ public:
 
     delete[] bindGroupLayouts;
     delete[] buffers;
-    delete[] targets;
   }
 
   ~RenderPipeline() {
@@ -285,7 +280,7 @@ public:
     .mappedAtCreation = false
     });
 
-  IndexedGeometry cube = {
+  WGPU::IndexedGeometry cube = {
     .primitive = {
       .topology = WGPUPrimitiveTopology_TriangleList,
       .stripIndexFormat = WGPUIndexFormat_Undefined,
@@ -360,7 +355,6 @@ public:
     .vertex = {
       .entryPoint = "vs",
       .buffers = cube.vertexBuffers,
-      // .layouts = cube.layouts,
     },
     .primitive = cube.primitive,
     .fragment = {
@@ -403,13 +397,8 @@ public:
   Application() {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
 
-    // cube.vertexBuffer.write(vertexData.data());
-
-    // SDL_Log("foo: %p", uniforms.camera.handle);
-    SDL_Log("foo: %p", cube.vertexBuffers[0].buffer.handle);
     cube.vertexBuffers[0].buffer.write(vertexData.data());
     cube.indexBuffer.write(indexData.data());
-    SDL_Log("bar");
 
     CameraUniform uniformData{
       .view = std::array<float, 16>{
@@ -463,11 +452,7 @@ public:
       WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
       wgpuRenderPassEncoderSetPipeline(pass.handle, pipeline.handle);
       wgpuRenderPassEncoderSetBindGroup(pass.handle, 0, bindGroup.handle, 0, nullptr);
-      // cube.draw(pass.handle);
-      wgpuRenderPassEncoderSetVertexBuffer(pass.handle, 0, cube.vertexBuffers[0].buffer.handle, 0,
-        cube.vertexBuffers[0].buffer.size);
-      wgpuRenderPassEncoderSetIndexBuffer(pass.handle, cube.indexBuffer.handle, WGPUIndexFormat_Uint16, 0, cube.indexBuffer.size);
-      wgpuRenderPassEncoderDrawIndexed(pass.handle, 36, 1, 0, 0, 0);
+      pass.draw(cube, 36);
       pass.end();
 
       WGPUCommandBufferDescriptor commandDescriptor{};
