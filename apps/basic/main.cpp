@@ -138,30 +138,36 @@ public:
 
   void render() {
     WGPUTextureView view = ctx.surfaceTextureCreateView();
+    std::vector<WGPUCommandBuffer> commands;
 
     uniforms.write(&state.alpha);
 
-    WGPUCommandEncoder encoder = ctx.createCommandEncoder(new WGPUCommandEncoderDescriptor{});
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, new WGPURenderPassDescriptor{
-      .colorAttachmentCount = 1,
-      .colorAttachments = new WGPURenderPassColorAttachment{
+    {
+      WGPUCommandEncoderDescriptor encoderDescriptor{};
+      WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
+
+      WGPURenderPassColorAttachment attachment{
       .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
       .view = view,
       .loadOp = WGPULoadOp_Clear,
       .storeOp = WGPUStoreOp_Store,
-      .clearValue = WGPUColor{ 0., 0., 0., 1. },
-      }
-      });
-    wgpuRenderPassEncoderSetPipeline(pass, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, wgpuBufferGetSize(vertexBuffer.buf));
-    wgpuRenderPassEncoderSetBindGroup(pass, 0, bindGroup.handle, 0, nullptr);
-    wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
-    wgpuRenderPassEncoderEnd(pass);
-    wgpuRenderPassEncoderRelease(pass);
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, new WGPUCommandBufferDescriptor{});
-    wgpuCommandEncoderRelease(encoder);
-    ctx.queueSubmit(1, &command);
-    wgpuCommandBufferRelease(command);
+      .clearValue = WGPUColor{ 0., 0., 0., 1. }
+      };
+      WGPURenderPassDescriptor passDescriptor{
+        .colorAttachmentCount = 1,
+        .colorAttachments = &attachment
+      };
+      WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
+
+      wgpuRenderPassEncoderSetPipeline(pass.handle, pipeline);
+      wgpuRenderPassEncoderSetVertexBuffer(pass.handle, 0, vertexBuffer.handle, 0, vertexBuffer.size);
+      wgpuRenderPassEncoderSetBindGroup(pass.handle, 0, bindGroup.handle, 0, nullptr);
+      wgpuRenderPassEncoderDraw(pass.handle, 3, 1, 0, 0);
+      wgpuRenderPassEncoderEnd(pass.handle);
+
+      WGPUCommandBufferDescriptor commandDescriptor{};
+      commands.push_back(encoder.finish(&commandDescriptor));
+    }
 
     ImGui_ImplWGPU_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -177,7 +183,10 @@ public:
     }
     ImGui::Render();
 
-    ImGui_render(ctx, view);
+    commands.push_back(ImGui_command(ctx, view));
+
+    ctx.submitCommands(commands);
+    ctx.releaseCommands(commands);
 
     ctx.present();
     ctx.surfaceTextureViewRelease(view);
