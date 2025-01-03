@@ -202,19 +202,24 @@ namespace WGPU {
 
   public:
     WGPUBufferDescriptor spec;
-    WGPUBuffer buf;
+    WGPUBuffer handle;
     uint64_t size;
 
     Buffer(Context& ctx, WGPUBufferDescriptor spec)
-      : ctx(ctx), spec(spec), buf(ctx.createBuffer(&spec)), size(wgpuBufferGetSize(buf)) {
+      : ctx(ctx), spec(spec) {
+      handle = ctx.createBuffer(&spec);
+      size = wgpuBufferGetSize(handle);
+      // SDL_Log("created %p,%d", handle, (int)spec.size);
     }
 
     ~Buffer() {
-      wgpuBufferRelease(buf);
+      // SDL_Log("bye: %p", handle);
+      wgpuBufferRelease(handle);
     }
 
     void write(const void* data, uint64_t offset = 0) {
-      ctx.writeBuffer(buf, offset, data, spec.size);
+      // SDL_Log("writing: %p", handle);
+      ctx.writeBuffer(handle, offset, data, size);
     }
   };
 
@@ -261,7 +266,7 @@ namespace WGPU {
       WGPUBindGroupEntry* bindGroupEntries = new WGPUBindGroupEntry[n];
       for (int i = 0; i < n; i++) bindGroupEntries[i] = WGPUBindGroupEntry{
         .binding = entries[i].binding,
-        .buffer = entries[i].buffer->buf,
+        .buffer = entries[i].buffer->handle,
         .offset = entries[i].offset,
         .size = entries[i].buffer->size
       };

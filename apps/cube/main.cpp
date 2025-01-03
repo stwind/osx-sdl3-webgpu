@@ -183,49 +183,17 @@ inline  Mat44& rotation(Mat44& mat, const Quaternion& quat) {
   return mat;
 }
 
-class Cube {
-  WGPU::Context& ctx;
-public:
-  WGPU::Buffer vertexBuffer;
+struct VertexBuffer {
+  WGPU::Buffer& buffer;
+  std::vector<WGPUVertexAttribute> attributes;
+  uint64_t arrayStride;
+  WGPUVertexStepMode stepMode;
+};
+
+struct IndexedGeometry {
+  WGPUPrimitiveState primitive;
+  std::vector<VertexBuffer> vertexBuffers;
   WGPU::Buffer indexBuffer;
-  WGPUPrimitiveState primitive{
-    .topology = WGPUPrimitiveTopology_TriangleList,
-    .stripIndexFormat = WGPUIndexFormat_Undefined,
-    .frontFace = WGPUFrontFace_CCW,
-    .cullMode = WGPUCullMode_Back,
-  };
-  std::vector<WGPUVertexBufferLayout> layouts;
-
-  Cube(WGPU::Context& ctx) : ctx(ctx),
-    vertexBuffer(WGPU::Buffer(ctx, {
-      .size = vertexData.size() * sizeof(float),
-      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-      })),
-      indexBuffer(WGPU::Buffer(ctx, {
-        .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-        }))
-  {
-    vertexBuffer.write(vertexData.data());
-    indexBuffer.write(indexData.data());
-
-    layouts.resize(1);
-    layouts[0] = {
-      .attributeCount = 2,
-      .attributes = new WGPUVertexAttribute[2]{
-        {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
-        {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 3 * sizeof(float) }
-        },
-      .arrayStride = 6 * sizeof(float),
-      .stepMode = WGPUVertexStepMode_Vertex
-    };
-  }
-
-  void draw(const WGPURenderPassEncoder& pass) {
-    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, vertexBuffer.buf, 0, vertexBuffer.size);
-    wgpuRenderPassEncoderSetIndexBuffer(pass, indexBuffer.buf, WGPUIndexFormat_Uint16, 0, indexBuffer.size);
-    wgpuRenderPassEncoderDrawIndexed(pass, 36, 1, 0, 0, 0);
-  }
 };
 
 class RenderPipeline {
@@ -236,7 +204,7 @@ public:
     std::vector<WGPU::BindGroup*>const& bindGroups;
     struct {
       char const* entryPoint;
-      std::vector<WGPUVertexBufferLayout>const& layouts;
+      std::vector<VertexBuffer>const& buffers;
     } vertex;
     WGPUPrimitiveState primitive;
     struct {
@@ -255,9 +223,17 @@ public:
     WGPUBindGroupLayout* bindGroupLayouts = new WGPUBindGroupLayout[bindGroupLayoutCount];
     for (int i = 0; i < bindGroupLayoutCount;i++) bindGroupLayouts[i] = desc.bindGroups[i]->layout;
 
-    size_t bufferCount = desc.vertex.layouts.size();
+    size_t bufferCount = desc.vertex.buffers.size();
     WGPUVertexBufferLayout* buffers = new WGPUVertexBufferLayout[bufferCount];
-    for (int i = 0; i < bufferCount; i++) buffers[i] = desc.vertex.layouts[i];
+    for (int i = 0; i < bufferCount; i++) {
+      auto& buf = desc.vertex.buffers[i];
+      buffers[i] = {
+        .attributeCount = buf.attributes.size(),
+        .attributes = buf.attributes.data(),
+        .arrayStride = buf.arrayStride,
+        .stepMode = buf.stepMode,
+      };
+    }
 
     size_t targetCount = desc.fragment.targets.size();
     WGPUColorTargetState* targets = new WGPUColorTargetState[targetCount];
@@ -301,12 +277,44 @@ public:
 class Application {
 public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
-  Cube cube = Cube(ctx);
+
+  WGPU::Buffer vbuf = WGPU::Buffer(ctx, {
+    .label = "vertex",
+    .size = vertexData.size() * sizeof(float),
+    .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+    .mappedAtCreation = false
+    });
+
+  IndexedGeometry cube = {
+    .primitive = {
+      .topology = WGPUPrimitiveTopology_TriangleList,
+      .stripIndexFormat = WGPUIndexFormat_Undefined,
+      .frontFace = WGPUFrontFace_CCW,
+      .cullMode = WGPUCullMode_Back,
+    },
+    .vertexBuffers = {
+      {
+        .buffer = vbuf,
+        .attributes = {
+          {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
+          {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 3 * sizeof(float) }
+        },
+        .arrayStride = 6 * sizeof(float),
+        .stepMode = WGPUVertexStepMode_Vertex
+      }
+    },
+    .indexBuffer = WGPU::Buffer(ctx, {
+      .label = "index",
+      .size = (indexData.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
+      .mappedAtCreation = false
+    })
+  };
 
   struct {
     WGPU::Buffer camera;
     WGPU::Buffer model;
-  } uniforms = {
+  } uniforms{
     .camera = WGPU::Buffer(ctx, {
       .label = "camera",
       .size = sizeof(CameraUniform),
@@ -351,7 +359,8 @@ public:
     .bindGroups = {&bindGroup},
     .vertex = {
       .entryPoint = "vs",
-      .layouts = cube.layouts,
+      .buffers = cube.vertexBuffers,
+      // .layouts = cube.layouts,
     },
     .primitive = cube.primitive,
     .fragment = {
@@ -393,6 +402,14 @@ public:
 
   Application() {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
+
+    // cube.vertexBuffer.write(vertexData.data());
+
+    // SDL_Log("foo: %p", uniforms.camera.handle);
+    SDL_Log("foo: %p", cube.vertexBuffers[0].buffer.handle);
+    cube.vertexBuffers[0].buffer.write(vertexData.data());
+    cube.indexBuffer.write(indexData.data());
+    SDL_Log("bar");
 
     CameraUniform uniformData{
       .view = std::array<float, 16>{
@@ -446,7 +463,11 @@ public:
       WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
       wgpuRenderPassEncoderSetPipeline(pass.handle, pipeline.handle);
       wgpuRenderPassEncoderSetBindGroup(pass.handle, 0, bindGroup.handle, 0, nullptr);
-      cube.draw(pass.handle);
+      // cube.draw(pass.handle);
+      wgpuRenderPassEncoderSetVertexBuffer(pass.handle, 0, cube.vertexBuffers[0].buffer.handle, 0,
+        cube.vertexBuffers[0].buffer.size);
+      wgpuRenderPassEncoderSetIndexBuffer(pass.handle, cube.indexBuffer.handle, WGPUIndexFormat_Uint16, 0, cube.indexBuffer.size);
+      wgpuRenderPassEncoderDrawIndexed(pass.handle, 36, 1, 0, 0, 0);
       pass.end();
 
       WGPUCommandBufferDescriptor commandDescriptor{};
@@ -502,7 +523,6 @@ public:
       ImGui::End();
     }
     ImGui::Render();
-
     commands.push_back(ImGui_command(ctx, view));
 
     ctx.submitCommands(commands);
