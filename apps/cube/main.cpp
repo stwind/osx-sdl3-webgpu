@@ -272,6 +272,11 @@ public:
     geom.vertexBuffers[0].buffer.write(data.vertices.data());
     geom.indexBuffer.write(data.indices.data());
   }
+
+  void draw(WGPU::RenderPass& pass) {
+    pass.setPipeline(pipeline);
+    pass.draw(geom);
+  }
 };
 
 class Application {
@@ -282,8 +287,6 @@ public:
   WGPU::Buffer model;
 
   CubeGeometry cube;
-
-  // WGPU::RenderPipeline pipeline;
 
   struct {
     bool isDown = false;
@@ -389,8 +392,7 @@ public:
         .colorAttachments = &attachment
       };
       WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
-      pass.setPipeline(cube.pipeline);
-      pass.draw(cube.geom);
+      cube.draw(pass);
       pass.end();
 
       WGPUCommandBufferDescriptor commandDescriptor{};
