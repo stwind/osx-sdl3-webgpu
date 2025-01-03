@@ -321,7 +321,7 @@ namespace WGPU {
     WGPURenderPipeline handle;
     std::vector<BindGroup> bindGroups;
 
-    RenderPipeline(WGPU::Context& ctx, Descriptor desc) {
+    RenderPipeline(WGPU::Context& ctx, const Descriptor& desc) {
       WGPU::ShaderModule shaderModule(ctx, desc.source);
 
       size_t bindGroupLayoutCount = desc.bindGroups.size();

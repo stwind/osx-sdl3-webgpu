@@ -196,7 +196,9 @@ public:
   WGPU::Buffer indexBuffer;
   WGPU::IndexedGeometry geom;
 
-  CubeGeometry(WGPU::Context& ctx)
+  WGPU::RenderPipeline pipeline;
+
+  CubeGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups)
     : vertexBuffer(ctx, {
       .label = "vertex",
       .size = data.vertices.size() * sizeof(float),
@@ -229,7 +231,43 @@ public:
       },
       .indexBuffer = indexBuffer,
       .count = static_cast<uint32_t>(data.indices.size()),
+      },
+    pipeline(ctx, {
+        .source = shaderSource,
+        .bindGroups = bindGroups,
+        .vertex = {
+          .entryPoint = "vs",
+          .buffers = geom.vertexBuffers,
+        },
+        .primitive = geom.primitive,
+        .fragment = {
+          .entryPoint = "fs",
+          .targets = {
+            {
+              .format = ctx.surfaceFormat,
+              .blend = std::make_unique<WGPUBlendState>(WGPUBlendState{
+                .color = {
+                  .srcFactor = WGPUBlendFactor_SrcAlpha,
+                  .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+                  .operation = WGPUBlendOperation_Add
+                },
+                .alpha = {
+                  .srcFactor = WGPUBlendFactor_Zero,
+                  .dstFactor = WGPUBlendFactor_One,
+                  .operation = WGPUBlendOperation_Add
+                }
+              }).get(),
+              .writeMask = WGPUColorWriteMask_All
+            }
+          }
+        },
+        .multisample = {
+          .count = 1,
+          .mask = ~0u,
+          .alphaToCoverageEnabled = false
+        }
       }
+    )
   {
     geom.vertexBuffers[0].buffer.write(data.vertices.data());
     geom.indexBuffer.write(data.indices.data());
@@ -240,28 +278,12 @@ class Application {
 public:
   WGPU::Context ctx = WGPU::Context(1280, 720);
 
+  WGPU::Buffer camera;
+  WGPU::Buffer model;
+
   CubeGeometry cube;
 
-  struct {
-    WGPU::Buffer camera;
-    WGPU::Buffer model;
-  } uniforms{
-    .camera = WGPU::Buffer(ctx, {
-      .label = "camera",
-      .size = sizeof(CameraUniform),
-      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-      .mappedAtCreation = false,
-      }),
-    .model = WGPU::Buffer(ctx, {
-      .label = "model",
-      .size = 16 * sizeof(float),
-      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-      .mappedAtCreation = false,
-      })
-  };
-
-  // WGPU::BindGroup bindGroup;
-  WGPU::RenderPipeline pipeline;
+  // WGPU::RenderPipeline pipeline;
 
   struct {
     bool isDown = false;
@@ -273,71 +295,48 @@ public:
   } state;
 
   Application()
-    : cube(ctx),
-    pipeline(ctx, {
-      .source = shaderSource,
-      .bindGroups = {
-        {
-          .label = "camera",
-          .entries = {
-      {
-        .binding = 0,
-        .buffer = &uniforms.camera,
-        .offset = 0,
-        .visibility = WGPUShaderStage_Vertex,
-        .layout = {
-          .type = WGPUBufferBindingType_Uniform,
-          .hasDynamicOffset = false,
-          .minBindingSize = uniforms.camera.size,
-          }
-        },
-        {
-          .binding = 1,
-          .buffer = &uniforms.model,
-          .offset = 0,
-          .visibility = WGPUShaderStage_Vertex,
-          .layout = {
-            .type = WGPUBufferBindingType_Uniform,
-            .hasDynamicOffset = false,
-            .minBindingSize = uniforms.model.size,
-          }
-        }
-      }
-        }
-      },
-      .vertex = {
-        .entryPoint = "vs",
-        .buffers = cube.geom.vertexBuffers,
-      },
-      .primitive = cube.geom.primitive,
-      .fragment = {
-        .entryPoint = "fs",
-        .targets = {
+    : camera(ctx, {
+      .label = "camera",
+      .size = sizeof(CameraUniform),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+      .mappedAtCreation = false,
+      }),
+      model(ctx, {
+        .label = "model",
+        .size = 16 * sizeof(float),
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+        .mappedAtCreation = false,
+        }),
+        cube(ctx, {
           {
-            .format = ctx.surfaceFormat,
-            .blend = std::make_unique<WGPUBlendState>(WGPUBlendState{
-              .color = {
-                .srcFactor = WGPUBlendFactor_SrcAlpha,
-                .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-                .operation = WGPUBlendOperation_Add
-              },
-              .alpha = {
-                .srcFactor = WGPUBlendFactor_Zero,
-                .dstFactor = WGPUBlendFactor_One,
-                .operation = WGPUBlendOperation_Add
+            .label = "camera",
+            .entries = {
+              {
+                .binding = 0,
+                .buffer = &camera,
+                .offset = 0,
+                .visibility = WGPUShaderStage_Vertex,
+                .layout = {
+                  .type = WGPUBufferBindingType_Uniform,
+                  .hasDynamicOffset = false,
+                  .minBindingSize = camera.size,
+                  }
+                },
+                {
+                  .binding = 1,
+                  .buffer = &model,
+                  .offset = 0,
+                  .visibility = WGPUShaderStage_Vertex,
+                  .layout = {
+                    .type = WGPUBufferBindingType_Uniform,
+                    .hasDynamicOffset = false,
+                    .minBindingSize = model.size,
+                  }
+                }
               }
-            }).get(),
-            .writeMask = WGPUColorWriteMask_All
-          }
-        }
-      },
-      .multisample = {
-        .count = 1,
-        .mask = ~0u,
-        .alphaToCoverageEnabled = false
-      }
-      }
-    ) {
+              }
+          })
+  {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
 
     CameraUniform uniformData{
@@ -349,7 +348,7 @@ public:
       },
       .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
     };
-    uniforms.camera.write(&uniformData);
+    camera.write(&uniformData);
   }
 
   ~Application() {
@@ -369,7 +368,7 @@ public:
 
     Mat44 m;
     rotation(m, rot);
-    uniforms.model.write(&m);
+    model.write(&m);
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
     std::vector<WGPUCommandBuffer> commands;
@@ -390,7 +389,7 @@ public:
         .colorAttachments = &attachment
       };
       WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
-      pass.setPipeline(pipeline);
+      pass.setPipeline(cube.pipeline);
       pass.draw(cube.geom);
       pass.end();
 
