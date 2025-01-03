@@ -407,6 +407,13 @@ namespace WGPU {
         wgpuRenderPassEncoderSetBindGroup(handle, i, pipeline.bindGroups[i].handle, 0, nullptr);
     }
 
+    void draw(Geometry& geom, uint32_t instanceCount = 1, uint32_t firstIndex = 0, uint32_t firstInstance = 0) {
+      for (int i = 0; i < geom.vertexBuffers.size(); i++) {
+        auto& buf = geom.vertexBuffers[i].buffer;
+        wgpuRenderPassEncoderSetVertexBuffer(handle, i, buf.handle, 0, buf.size);
+      }
+      wgpuRenderPassEncoderDraw(handle, geom.count, instanceCount, firstIndex, firstInstance);
+    }
     void draw(IndexedGeometry& geom, uint32_t instanceCount = 1, uint32_t firstIndex = 0, int32_t baseVertex = 0, uint32_t firstInstance = 0) {
       for (int i = 0; i < geom.vertexBuffers.size(); i++) {
         auto& buf = geom.vertexBuffers[i].buffer;

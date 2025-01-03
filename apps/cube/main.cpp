@@ -2,33 +2,6 @@
 #include "wgpu.hpp"
 #include "imgui.hpp"
 
-const char* shaderSource = R"(
-struct Camera {
-	view : mat4x4f,
-	proj : mat4x4f,
-}
-
-struct VSOutput {
-    @builtin(position) position: vec4f,
-    @location(0) normal: vec3f,
-};
-
-@group(0) @binding(0) var<uniform> camera : Camera;
-@group(0) @binding(1) var<uniform> model : mat4x4f;
-
-@vertex fn vs(
-  @location(0) position: vec3f,
-  @location(1) normal: vec3f) -> VSOutput {
-
-  let pos = camera.proj * camera.view * model * vec4f(position, 1);
-  return VSOutput(pos, normal);
-}
-
-@fragment fn fs(@location(0) normal: vec3f) -> @location(0) vec4f {
-	return vec4f(pow(normalize(normal) * .5 + .5, vec3f(2.2)), 1.);
-}
-)";
-
 struct CameraUniform {
   std::array<float, 16> view;
   std::array<float, 16> proj;
@@ -52,6 +25,22 @@ std::array<float, 16> perspective(float fov, float aspect, float near, float far
     mat[14] = -near;
   }
   return mat;
+};
+
+class GnomonData {
+public:
+  std::vector<float> vertices;
+
+  GnomonData(float s = 1.) {
+    vertices = {
+      0, 0, 0, 1, 0, 0,
+      s, 0, 0, 1, 0, 0, // x
+      0, 0, 0, 0, 1, 0,
+      0, s, 0, 0, 1, 0, // y
+      0, 0, 0, 0, 0, 1,
+      0, 0, s, 0, 0, 1, // z
+    };
+  }
 };
 
 class CubeData {
@@ -188,7 +177,144 @@ inline Mat44& rotation(Mat44& mat, const Quaternion& quat) {
   return mat;
 }
 
+class GnomonGeometry {
+private:
+  const char* shaderSource = R"(
+  struct Camera {
+    view : mat4x4f,
+    proj : mat4x4f,
+  }
+
+  struct VSOutput {
+      @builtin(position) position: vec4f,
+      @location(0) color: vec3f,
+  };
+
+  @group(0) @binding(0) var<uniform> camera : Camera;
+  @group(0) @binding(1) var<uniform> model : mat4x4f;
+
+  @vertex fn vs(
+    @location(0) position: vec3f,
+    @location(1) color: vec3f,
+    ) -> VSOutput {
+
+    var pos = camera.proj * camera.view * model * vec4f(position, 1);
+    return VSOutput(pos, color);
+  }
+
+  @fragment fn fs(@location(0) color: vec3f) -> @location(0) vec4f {
+    return vec4f(pow(color, vec3f(2.2)), 1.);
+  }
+  )";
+
+public:
+  GnomonData data;
+  WGPU::Buffer vertexBuffer;
+
+  WGPU::Geometry geom;
+  WGPU::RenderPipeline pipeline;
+
+  GnomonGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
+    vertexBuffer(ctx, {
+      .label = "vertex",
+      .size = data.vertices.size() * sizeof(float),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+      .mappedAtCreation = false
+      }),
+    geom{
+      .primitive = {
+        .topology = WGPUPrimitiveTopology_LineList,
+        .stripIndexFormat = WGPUIndexFormat_Undefined,
+        .frontFace = WGPUFrontFace_CCW,
+        .cullMode = WGPUCullMode_None,
+      },
+      .vertexBuffers = {
+        {
+          .buffer = vertexBuffer,
+          .attributes = {
+            {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
+            {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 3 * sizeof(float) }
+          },
+          .arrayStride = 6 * sizeof(float),
+          .stepMode = WGPUVertexStepMode_Vertex
+        }
+      },
+      .count = 6
+      },
+    pipeline(ctx, {
+      .source = shaderSource,
+      .bindGroups = bindGroups,
+      .vertex = {
+        .entryPoint = "vs",
+        .buffers = geom.vertexBuffers,
+      },
+      .primitive = geom.primitive,
+      .fragment = {
+        .entryPoint = "fs",
+        .targets = {
+          {
+            .format = ctx.surfaceFormat,
+            .blend = std::make_unique<WGPUBlendState>(WGPUBlendState{
+              .color = {
+                .srcFactor = WGPUBlendFactor_SrcAlpha,
+                .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+                .operation = WGPUBlendOperation_Add
+              },
+              .alpha = {
+                .srcFactor = WGPUBlendFactor_Zero,
+                .dstFactor = WGPUBlendFactor_One,
+                .operation = WGPUBlendOperation_Add
+              }
+            }).get(),
+            .writeMask = WGPUColorWriteMask_All
+          }
+        }
+    },
+    .multisample = {
+      .count = 1,
+      .mask = ~0u,
+      .alphaToCoverageEnabled = false
+    }
+      }
+    )
+  {
+    geom.vertexBuffers[0].buffer.write(data.vertices.data());
+  }
+
+  void draw(WGPU::RenderPass& pass) {
+    pass.setPipeline(pipeline);
+    pass.draw(geom);
+  }
+};
+
 class CubeGeometry {
+private:
+  const char* shaderSource = R"(
+  struct Camera {
+    view : mat4x4f,
+    proj : mat4x4f,
+  }
+
+  struct VSOutput {
+      @builtin(position) position: vec4f,
+      @location(0) normal: vec3f,
+  };
+
+  @group(0) @binding(0) var<uniform> camera : Camera;
+  @group(0) @binding(1) var<uniform> model : mat4x4f;
+
+  @vertex fn vs(
+    @location(0) position: vec3f,
+    @location(1) normal: vec3f) -> VSOutput {
+
+    let pos = camera.proj * camera.view * model * vec4f(position, 1);
+    return VSOutput(pos, normal);
+  }
+
+  @fragment fn fs(@location(0) normal: vec3f) -> @location(0) vec4f {
+    return vec4f(pow(normalize(normal) * .5 + .5, vec3f(2.2)), 1.);
+  }
+  )";
 public:
   CubeData data;
 
@@ -233,39 +359,39 @@ public:
       .count = static_cast<uint32_t>(data.indices.size()),
       },
     pipeline(ctx, {
-        .source = shaderSource,
-        .bindGroups = bindGroups,
-        .vertex = {
-          .entryPoint = "vs",
-          .buffers = geom.vertexBuffers,
-        },
-        .primitive = geom.primitive,
-        .fragment = {
-          .entryPoint = "fs",
-          .targets = {
-            {
-              .format = ctx.surfaceFormat,
-              .blend = std::make_unique<WGPUBlendState>(WGPUBlendState{
-                .color = {
-                  .srcFactor = WGPUBlendFactor_SrcAlpha,
-                  .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
-                  .operation = WGPUBlendOperation_Add
-                },
-                .alpha = {
-                  .srcFactor = WGPUBlendFactor_Zero,
-                  .dstFactor = WGPUBlendFactor_One,
-                  .operation = WGPUBlendOperation_Add
-                }
-              }).get(),
-              .writeMask = WGPUColorWriteMask_All
-            }
+      .source = shaderSource,
+      .bindGroups = bindGroups,
+      .vertex = {
+        .entryPoint = "vs",
+        .buffers = geom.vertexBuffers,
+      },
+      .primitive = geom.primitive,
+      .fragment = {
+        .entryPoint = "fs",
+        .targets = {
+          {
+            .format = ctx.surfaceFormat,
+            .blend = std::make_unique<WGPUBlendState>(WGPUBlendState{
+              .color = {
+                .srcFactor = WGPUBlendFactor_SrcAlpha,
+                .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+                .operation = WGPUBlendOperation_Add
+              },
+              .alpha = {
+                .srcFactor = WGPUBlendFactor_Zero,
+                .dstFactor = WGPUBlendFactor_One,
+                .operation = WGPUBlendOperation_Add
+              }
+            }).get(),
+            .writeMask = WGPUColorWriteMask_All
           }
-        },
-        .multisample = {
-          .count = 1,
-          .mask = ~0u,
-          .alphaToCoverageEnabled = false
         }
+      },
+      .multisample = {
+        .count = 1,
+        .mask = ~0u,
+        .alphaToCoverageEnabled = false
+      }
       }
     )
   {
@@ -286,6 +412,7 @@ public:
   WGPU::Buffer camera;
   WGPU::Buffer model;
 
+  GnomonGeometry gnomon;
   CubeGeometry cube;
 
   struct {
@@ -297,48 +424,77 @@ public:
     float theta = M_PI_2;
   } state;
 
-  Application()
-    : camera(ctx, {
-      .label = "camera",
+  Application() : camera(ctx, {
+    .label = "camera",
       .size = sizeof(CameraUniform),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
+    }),
+    model(ctx, {
+      .label = "model",
+      .size = 16 * sizeof(float),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
+      .mappedAtCreation = false,
       }),
-      model(ctx, {
-        .label = "model",
-        .size = 16 * sizeof(float),
-        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-        .mappedAtCreation = false,
-        }),
-        cube(ctx, {
-          {
-            .label = "camera",
-            .entries = {
-              {
-                .binding = 0,
-                .buffer = &camera,
-                .offset = 0,
-                .visibility = WGPUShaderStage_Vertex,
-                .layout = {
-                  .type = WGPUBufferBindingType_Uniform,
-                  .hasDynamicOffset = false,
-                  .minBindingSize = camera.size,
-                  }
-                },
-                {
-                  .binding = 1,
-                  .buffer = &model,
-                  .offset = 0,
-                  .visibility = WGPUShaderStage_Vertex,
-                  .layout = {
-                    .type = WGPUBufferBindingType_Uniform,
-                    .hasDynamicOffset = false,
-                    .minBindingSize = model.size,
-                  }
+
+      gnomon(ctx, {
+        {
+          .label = "camera",
+          .entries = {
+            {
+              .binding = 0,
+              .buffer = &camera,
+              .offset = 0,
+              .visibility = WGPUShaderStage_Vertex,
+              .layout = {
+                .type = WGPUBufferBindingType_Uniform,
+                .hasDynamicOffset = false,
+                .minBindingSize = camera.size,
                 }
+            },
+            {
+              .binding = 1,
+              .buffer = &model,
+              .offset = 0,
+              .visibility = WGPUShaderStage_Vertex,
+              .layout = {
+                .type = WGPUBufferBindingType_Uniform,
+                .hasDynamicOffset = false,
+                .minBindingSize = model.size,
               }
+            }
+          }
+        }
+        }),
+    cube(ctx, {
+        {
+          .label = "camera",
+          .entries = {
+            {
+              .binding = 0,
+              .buffer = &camera,
+              .offset = 0,
+              .visibility = WGPUShaderStage_Vertex,
+              .layout = {
+                .type = WGPUBufferBindingType_Uniform,
+                .hasDynamicOffset = false,
+                .minBindingSize = camera.size,
+                }
+            },
+            {
+              .binding = 1,
+              .buffer = &model,
+              .offset = 0,
+              .visibility = WGPUShaderStage_Vertex,
+              .layout = {
+                .type = WGPUBufferBindingType_Uniform,
+                .hasDynamicOffset = false,
+                .minBindingSize = model.size,
               }
-          })
+            }
+          }
+        }
+      })
   {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
 
@@ -392,6 +548,7 @@ public:
         .colorAttachments = &attachment
       };
       WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
+      gnomon.draw(pass);
       cube.draw(pass);
       pass.end();
 
