@@ -17,7 +17,14 @@ FetchContent_MakeAvailable(Catch2)
 
 set(TARGET ${PROJECT_NAME})
 
-add_executable(${TARGET} test_foo.cpp)
+set(ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
+
+add_executable(${TARGET} test_read_off.cpp)
+
+target_include_directories(${TARGET} PUBLIC 
+${ROOT}/include
+)
+
 target_link_libraries(${TARGET} PRIVATE Catch2::Catch2WithMain)
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)

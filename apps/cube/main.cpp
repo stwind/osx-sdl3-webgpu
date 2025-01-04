@@ -328,7 +328,7 @@ public:
     }),
     model(ctx, {
       .label = "model",
-      .size = 16 * sizeof(float),
+      .size = sizeof(Mat44),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
       }),

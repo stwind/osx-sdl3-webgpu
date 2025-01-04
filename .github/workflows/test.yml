@@ -34,6 +34,6 @@ jobs:
 
       - name: Run tests
         working-directory: tests
-        run: ${{ env.CTEST }} --test-dir build
+        run: ${{ env.CTEST }} --test-dir build --output-on-failure
         env:
           CTEST: $GITHUB_WORKSPACE/cmake-${{ env.CMAKE_VERSION }}-linux-x86_64/bin/ctest
