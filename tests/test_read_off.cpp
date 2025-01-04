@@ -1,5 +1,4 @@
 #include <catch2/catch_test_macros.hpp>
-
 #include "read_off.hpp"
 
 #define DATA_DIR "../../data"
@@ -8,8 +7,6 @@ TEST_CASE("readOFF", "") {
   std::vector<float> V;
   std::vector<uint16_t> F;
   readOFF(DATA_DIR "/screwdriver.off", V, F);
-  printf("%f,%f,%f\n", V[0], V[1], V[2]);
-  printf("%d, %d", (int)V.size(), (int)F.size());
 
   std::vector<float> vFirst{
     0.001266  ,  0.008844  , -0.007131  ,  0.003823  ,  0.01204   ,

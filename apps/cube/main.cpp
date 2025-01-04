@@ -328,7 +328,7 @@ public:
     }),
     model(ctx, {
       .label = "model",
-      .size = sizeof(Mat44),
+      .size = sizeof(math::Mat44),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
       }),
@@ -408,8 +408,8 @@ public:
     depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
 
     CameraUniform uniformData{};
-    perspective(uniformData.proj, radians(45), ctx.aspect, .1, 100);
-    lookAt(uniformData.view, { 0, 0, 5 }, { 0, 0, -1 }, { 0,1,0 });
+    math::perspective(uniformData.proj, math::radians(45), ctx.aspect, .1, 100);
+    math::lookAt(uniformData.view, { 0, 0, 5 }, { 0, 0, -1 }, { 0,1,0 });
 
     camera.write(&uniformData);
   }
@@ -428,12 +428,12 @@ public:
   }
 
   void render() {
-    Vec3 vec;
-    Quaternion rot;
-    betweenZ(rot, sph2cart(vec, { state.phi, state.theta,1. }));
+    math::Vec3 vec;
+    math::Quaternion rot;
+    math::betweenZ(rot, math::sph2cart(vec, { state.phi, state.theta,1. }));
 
-    Mat44 m;
-    rotation(m, rot);
+    math::Mat44 m;
+    math::rotation(m, rot);
     model.write(&m);
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
