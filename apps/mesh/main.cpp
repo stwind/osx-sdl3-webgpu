@@ -1,5 +1,6 @@
 #include <SDL3/SDL.h>
 #include "common.hpp"
+#include "primitive.hpp"
 #include "math.hpp"
 
 struct CameraUniform {
@@ -7,24 +8,10 @@ struct CameraUniform {
   std::array<float, 16> proj;
 };
 
-class GnomonData {
-public:
-  std::vector<float> vertices;
-
-  GnomonData(float s = 1.) {
-    vertices = {
-      0, 0, 0, 1, 0, 0,
-      s, 0, 0, 1, 0, 0, // x
-      0, 0, 0, 0, 1, 0,
-      0, s, 0, 0, 1, 0, // y
-      0, 0, 0, 0, 0, 1,
-      0, 0, s, 0, 0, 1, // z
-    };
-  }
-};
-
 class GnomonGeometry {
 private:
+  std::vector<float> vertices;
+
   const char* source = R"(
   struct Camera {
     view : mat4x4f,
@@ -32,8 +19,8 @@ private:
   }
 
   struct VSOutput {
-      @builtin(position) position: vec4f,
-      @location(0) color: vec3f,
+    @builtin(position) position: vec4f,
+    @location(0) color: vec3f,
   };
 
   @group(0) @binding(0) var<uniform> camera : Camera;
@@ -54,16 +41,17 @@ private:
   )";
 
 public:
-  GnomonData data;
   WGPU::Buffer vertexBuffer;
 
   WGPU::Geometry geom;
   WGPU::RenderPipeline pipeline;
 
   GnomonGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
+    vertices(prim::gnomon(1.)),
+
     vertexBuffer(ctx, {
       .label = "vertex",
-      .size = data.vertices.size() * sizeof(float),
+      .size = vertices.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
       .mappedAtCreation = false
       }),
@@ -123,7 +111,7 @@ public:
     }
       })
   {
-    geom.vertexBuffers[0].buffer.write(data.vertices.data());
+    geom.vertexBuffers[0].buffer.write(vertices.data());
   }
 
   void draw(WGPU::RenderPass& pass) {

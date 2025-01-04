@@ -1,5 +1,6 @@
 #include <SDL3/SDL.h>
 #include "common.hpp"
+#include "primitive.hpp"
 #include "math.hpp"
 
 struct CameraUniform {
@@ -7,72 +8,10 @@ struct CameraUniform {
   std::array<float, 16> proj;
 };
 
-class GnomonData {
-public:
-  std::vector<float> vertices;
-
-  GnomonData(float s = 1.) {
-    vertices = {
-      0, 0, 0, 1, 0, 0,
-      s, 0, 0, 1, 0, 0, // x
-      0, 0, 0, 0, 1, 0,
-      0, s, 0, 0, 1, 0, // y
-      0, 0, 0, 0, 0, 1,
-      0, 0, s, 0, 0, 1, // z
-    };
-  }
-};
-
-class CubeData {
-public:
-  std::vector<float> vertices;
-  std::vector<uint16_t> indices{
-    0, 1, 2,
-    0, 2, 3,
-    4, 5, 6,
-    4, 6, 7,
-    8, 9, 10,
-    8, 10, 11,
-    12, 13, 14,
-    12, 14, 15,
-    16, 17, 18,
-    16, 18, 19,
-    20, 21, 22,
-    20, 22, 23
-  };
-
-  CubeData(float s = .5) {
-    vertices = {
-      s, s, -s, 1, 0, 0,
-      s, s, s, 1, 0, 0,
-      s, -s, s, 1, 0, 0,
-      s, -s, -s, 1, 0, 0,
-      -s, s, s, -1, 0, 0,
-      -s, s, -s, -1, 0, 0,
-      -s, -s, -s, -1, 0, 0,
-      -s, -s, s, -1, 0, 0,
-      -s, s, s, 0, 1, 0,
-      s, s, s, 0, 1, 0,
-      s, s, -s, 0, 1, 0,
-      -s, s, -s, 0, 1, 0,
-      -s, -s, -s, 0, -1, 0,
-      s, -s, -s, 0, -1, 0,
-      s, -s, s, 0, -1, 0,
-      -s, -s, s, 0, -1, 0,
-      s, s, s, 0, 0, 1,
-      -s, s, s, 0, 0, 1,
-      -s, -s, s, 0, 0, 1,
-      s, -s, s, 0, 0, 1,
-      -s, s, -s, 0, 0, -1,
-      s, s, -s, 0, 0, -1,
-      s, -s, -s, 0, 0, -1,
-      -s, -s, -s, 0, 0, -1,
-    };
-  }
-};
-
 class GnomonGeometry {
 private:
+  std::vector<float> vertices;
+
   const char* source = R"(
   struct Camera {
     view : mat4x4f,
@@ -102,16 +41,16 @@ private:
   )";
 
 public:
-  GnomonData data;
   WGPU::Buffer vertexBuffer;
 
   WGPU::Geometry geom;
   WGPU::RenderPipeline pipeline;
 
   GnomonGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
+    vertices(prim::gnomon(1.)),
     vertexBuffer(ctx, {
       .label = "vertex",
-      .size = data.vertices.size() * sizeof(float),
+      .size = vertices.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
       .mappedAtCreation = false
       }),
@@ -171,7 +110,7 @@ public:
     }
       })
   {
-    geom.vertexBuffers[0].buffer.write(data.vertices.data());
+    geom.vertexBuffers[0].buffer.write(vertices.data());
   }
 
   void draw(WGPU::RenderPass& pass) {
@@ -182,6 +121,9 @@ public:
 
 class CubeGeometry {
 private:
+  std::vector<float> vertices;
+  std::vector<uint16_t> indices;
+
   const char* shaderSource = R"(
   struct Camera {
     view : mat4x4f,
@@ -209,24 +151,24 @@ private:
   }
   )";
 public:
-  CubeData data;
-
   WGPU::Buffer vertexBuffer;
   WGPU::Buffer indexBuffer;
   WGPU::IndexedGeometry geom;
 
   WGPU::RenderPipeline pipeline;
 
-  CubeGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups)
-    : vertexBuffer(ctx, {
-      .label = "vertex",
-      .size = data.vertices.size() * sizeof(float),
-      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-      .mappedAtCreation = false
+  CubeGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
+    vertices(std::move(std::get<0>(prim::cube(.5)))),
+    indices(std::move(std::get<1>(prim::cube(.5)))),
+    vertexBuffer(ctx, {
+        .label = "vertex",
+        .size = vertices.size() * sizeof(float),
+        .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+        .mappedAtCreation = false
       }),
     indexBuffer(ctx, {
       .label = "index",
-      .size = (data.indices.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
+      .size = (indices.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
       .mappedAtCreation = false
       }),
@@ -249,7 +191,7 @@ public:
         }
       },
       .indexBuffer = indexBuffer,
-      .count = static_cast<uint32_t>(data.indices.size()),
+      .count = static_cast<uint32_t>(indices.size()),
       },
     pipeline(ctx, {
       .source = shaderSource,
@@ -288,8 +230,8 @@ public:
       }
     )
   {
-    geom.vertexBuffers[0].buffer.write(data.vertices.data());
-    geom.indexBuffer.write(data.indices.data());
+    geom.vertexBuffers[0].buffer.write(vertices.data());
+    geom.indexBuffer.write(indices.data());
   }
 
   void draw(WGPU::RenderPass& pass) {
@@ -390,8 +332,6 @@ public:
         }
       })
   {
-    if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
-
     WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
     WGPUTextureDescriptor depthTextureDesc{
       .dimension = WGPUTextureDimension_2D,
