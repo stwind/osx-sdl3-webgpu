@@ -8,26 +8,6 @@ struct CameraUniform {
   std::array<float, 16> proj;
 };
 
-std::array<float, 16> perspective(float fov, float aspect, float near, float far) {
-  std::array<float, 16> mat = { 0 };
-  float f = std::tan(M_PI * 0.5 - 0.5 * fov);
-  mat[0] = f / aspect; mat[1] = 0; mat[2] = 0; mat[3] = 0;
-  mat[4] = 0; mat[5] = f; mat[6] = 0; mat[7] = 0;
-  mat[8] = 0; mat[9] = 0; mat[11] = -1;
-  mat[12] = 0; mat[13] = 0; mat[15] = 0;
-
-  if (std::isfinite(far)) {
-    float rangeInv = 1 / (near - far);
-    mat[10] = far * rangeInv;
-    mat[14] = far * near * rangeInv;
-  }
-  else {
-    mat[10] = -1;
-    mat[14] = -near;
-  }
-  return mat;
-};
-
 class GnomonData {
 public:
   std::vector<float> vertices;
@@ -91,8 +71,6 @@ public:
     };
   }
 };
-
-
 
 class GnomonGeometry {
 private:
@@ -422,22 +400,17 @@ public:
       .format = depthTextureFormat,
       .mipLevelCount = 1,
       .sampleCount = 1,
-      .size = { std::get<0>(ctx.size), std::get<1>(ctx.size), 1 },
+      .size{ std::get<0>(ctx.size), std::get<1>(ctx.size), 1 },
       .usage = WGPUTextureUsage_RenderAttachment,
       .viewFormatCount = 1,
       .viewFormats = &depthTextureFormat,
     };
     depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
 
-    CameraUniform uniformData{
-      .view = std::array<float, 16>{
-        1,0,0,0,
-        0,1,0,0,
-        0,0,1,0,
-        0,0,-5,1,
-      },
-      .proj = perspective(45 * M_PI / 180, ctx.aspect,.1,100),
-    };
+    CameraUniform uniformData{};
+    perspective(uniformData.proj, radians(45), ctx.aspect, .1, 100);
+    lookAt(uniformData.view, { 0, 0, 5 }, { 0, 0, -1 }, { 0,1,0 });
+
     camera.write(&uniformData);
   }
 
