@@ -182,14 +182,14 @@ public:
       ImGui::End();
     }
     ImGui::Render();
-
     commands.push_back(ImGui_command(ctx, view));
+
+    wgpuTextureViewRelease(view);
 
     ctx.submitCommands(commands);
     ctx.releaseCommands(commands);
 
     ctx.present();
-    ctx.surfaceTextureViewRelease(view);
   }
 };
 

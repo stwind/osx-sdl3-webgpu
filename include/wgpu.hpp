@@ -64,23 +64,6 @@ WGPUDevice requestDevice(WGPUAdapter adapter) {
   return device;
 }
 
-void configureSurface(SDL_Window* window, WGPUSurface surface, WGPUDevice device, WGPUTextureFormat surfaceFormat) {
-  int bbwidth, bbheight;
-  SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-  WGPUSurfaceConfiguration config{
-    .device = device,
-    .format = surfaceFormat,
-    .usage = WGPUTextureUsage_RenderAttachment,
-    .viewFormatCount = 1,
-    .viewFormats = &surfaceFormat,
-    .alphaMode = WGPUCompositeAlphaMode_Auto,
-    .presentMode = WGPUPresentMode_Fifo,
-    .width = (uint32_t)bbwidth,
-    .height = (uint32_t)bbheight,
-  };
-  wgpuSurfaceConfigure(surface, &config);
-}
-
 namespace WGPU {
   class Context {
   public:
@@ -91,6 +74,7 @@ namespace WGPU {
     WGPUSurfaceTexture surfaceTexture;
     WGPUTextureFormat surfaceFormat;
 
+    std::tuple<uint32_t, uint32_t> size;
     float aspect;
 
     Context(int w, int h, WGPUTextureFormat surfaceFormat = WGPUTextureFormat_BGRA8UnormSrgb)
@@ -101,6 +85,11 @@ namespace WGPU {
       window = SDL_CreateWindow("Window", w, h, SDL_WINDOW_METAL);
       if (window == nullptr) throw std::runtime_error("SDL_CreateWindow failed");
 
+      int bbwidth, bbheight;
+      SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
+      std::get<0>(size) = static_cast<uint32_t>(bbwidth);
+      std::get<1>(size) = static_cast<uint32_t>(bbheight);
+
       WGPUInstanceDescriptor descriptor{};
       WGPUInstance instance = wgpuCreateInstance(&descriptor);
       surface = SDL_GetWGPUSurface(instance, window);
@@ -108,13 +97,27 @@ namespace WGPU {
       wgpuInstanceRelease(instance);
       device = requestDevice(adapter);
       wgpuAdapterRelease(adapter);
-      configureSurface(window, surface, device, surfaceFormat);
+
+      WGPUSurfaceConfiguration config{
+        .device = device,
+        .format = surfaceFormat,
+        .usage = WGPUTextureUsage_RenderAttachment,
+        .viewFormatCount = 1,
+        .viewFormats = &surfaceFormat,
+        .alphaMode = WGPUCompositeAlphaMode_Auto,
+        .presentMode = WGPUPresentMode_Fifo,
+        .width = std::get<0>(size),
+        .height = std::get<1>(size),
+      };
+      wgpuSurfaceConfigure(surface, &config);
+
       queue = wgpuDeviceGetQueue(device);
     }
 
     ~Context() {
       wgpuQueueRelease(queue);
       wgpuDeviceRelease(device);
+      wgpuTextureRelease(surfaceTexture.texture);
       wgpuSurfaceUnconfigure(surface);
       wgpuSurfaceRelease(surface);
 
@@ -167,7 +170,7 @@ namespace WGPU {
     WGPUTextureView surfaceTextureCreateView() {
       wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
       WGPUTextureViewDescriptor descriptor{
-        .format = wgpuTextureGetFormat(surfaceTexture.texture),
+        .format = surfaceFormat,
         .dimension = WGPUTextureViewDimension_2D,
         .baseMipLevel = 0,
         .mipLevelCount = 1,
@@ -176,11 +179,6 @@ namespace WGPU {
         .aspect = WGPUTextureAspect_All,
       };
       return wgpuTextureCreateView(surfaceTexture.texture, &descriptor);
-    }
-
-    void surfaceTextureViewRelease(WGPUTextureView view) {
-      wgpuTextureViewRelease(view);
-      wgpuTextureRelease(surfaceTexture.texture);
     }
 
     void present() {

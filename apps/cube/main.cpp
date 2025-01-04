@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include "wgpu.hpp"
 #include "imgui.hpp"
+#include "math.hpp"
 
 struct CameraUniform {
   std::array<float, 16> view;
@@ -91,95 +92,11 @@ public:
   }
 };
 
-using Vec3 = std::array<float, 3>;
-using Mat44 = std::array<float, 16>;
-using Quaternion = std::array<float, 4>;
 
-inline Vec3& sph2cart(Vec3& out, const Vec3& v) {
-  float az = v[0], el = v[1], r = v[2];
-  float c = std::cos(el);
-  out[0] = c * std::cos(az) * r;
-  out[1] = c * std::sin(az) * r;
-  out[2] = std::sin(el) * r;
-  return out;
-}
-
-inline float dot(const Vec3& a, const Vec3& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
-inline float norm(const Vec3& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
-inline float norm(const Quaternion& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]); }
-
-inline Vec3& normalize(Vec3& out, const Vec3& v, float eps = 1e-12) {
-  float n = 1. / norm(v);
-  out[0] = v[0] * n; out[1] = v[1] * n; out[2] = v[2] * n;
-  return out;
-}
-
-inline Quaternion& normalize(Quaternion& out, const Quaternion& v, float eps = 1e-12) {
-  float n = 1. / norm(v);
-  out[0] = v[0] * n; out[1] = v[1] * n; out[2] = v[2] * n; out[3] = v[3] * n;
-  return out;
-}
-
-inline Vec3& orthogonal(Vec3& out, const Vec3& v, float m = .5, float n = .5) {
-  out[0] = m * -v[1] + n * -v[2];
-  out[1] = m * v[0];
-  out[2] = n * v[0];
-  return normalize(out, out);
-}
-
-inline Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
-  rad *= .5;
-  float s = std::sin(rad);
-  quat[0] = s * axis[0];
-  quat[1] = s * axis[1];
-  quat[2] = s * axis[2];
-  quat[3] = std::cos(rad);
-  return quat;
-}
-
-inline Quaternion& between(Quaternion& out, const Vec3& a, const Vec3& b) {
-  float w = dot(a, b);
-  out[0] = a[1] * b[2] - a[2] * b[1];
-  out[1] = a[2] * b[0] - a[0] * b[2];
-  out[2] = a[0] * b[1] - a[1] * b[0];
-  out[3] = w + std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2] + w * w);
-  if (out[0] == 0. && out[1] == 0. && out[2] == 0. && out[3] == 0.) {
-    Vec3 axis;
-    return axisAngle(out, orthogonal(axis, a), M_PI);
-  }
-
-  return normalize(out, out);
-}
-
-inline Quaternion& betweenZ(Quaternion& out, const Vec3& b) {
-  float w = b[2];
-  out[0] = -b[1]; out[1] = b[0]; out[2] = 0.;
-  out[3] = w + std::sqrt(out[0] * out[0] + out[1] * out[1] + w * w);
-  if (out[0] == 0. && out[1] == 0. && out[2] == 0. && out[3] == 0.) {
-    out[1] = 1;
-    return out;
-  }
-
-  return normalize(out, out);
-}
-
-inline Mat44& rotation(Mat44& mat, const Quaternion& quat) {
-  float x = quat[0], y = quat[1], z = quat[2], w = quat[3];
-  float x2 = x + x, y2 = y + y, z2 = z + z;
-  float xx = x * x2, xy = x * y2, xz = x * z2;
-  float yy = y * y2, yz = y * z2, zz = z * z2;
-  float wx = w * x2, wy = w * y2, wz = w * z2;
-
-  mat[0] = 1 - (yy + zz); mat[1] = xy + wz; mat[2] = xz - wy; mat[3] = 0;
-  mat[4] = xy - wz; mat[5] = 1 - (xx + zz); mat[6] = yz + wx; mat[7] = 0;
-  mat[8] = xz + wy; mat[9] = yz - wx; mat[10] = 1 - (xx + yy); mat[11] = 0;
-  mat[12] = 0; mat[13] = 0; mat[14] = 0; mat[15] = 1;
-  return mat;
-}
 
 class GnomonGeometry {
 private:
-  const char* shaderSource = R"(
+  const char* source = R"(
   struct Camera {
     view : mat4x4f,
     proj : mat4x4f,
@@ -242,7 +159,7 @@ public:
       .count = 6
       },
     pipeline(ctx, {
-      .source = shaderSource,
+      .source = source,
       .bindGroups = bindGroups,
       .vertex = {
         .entryPoint = "vs",
@@ -275,8 +192,7 @@ public:
       .mask = ~0u,
       .alphaToCoverageEnabled = false
     }
-      }
-    )
+      })
   {
     geom.vertexBuffers[0].buffer.write(data.vertices.data());
   }
@@ -415,6 +331,8 @@ public:
   GnomonGeometry gnomon;
   CubeGeometry cube;
 
+  WGPUTexture depthTexture;
+
   struct {
     bool isDown = false;
     ImVec2 downPos = { -1,-1 };
@@ -498,6 +416,19 @@ public:
   {
     if (!ImGui_init(&ctx)) throw std::runtime_error("ImGui_init failed");
 
+    WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
+    WGPUTextureDescriptor depthTextureDesc{
+      .dimension = WGPUTextureDimension_2D,
+      .format = depthTextureFormat,
+      .mipLevelCount = 1,
+      .sampleCount = 1,
+      .size = { std::get<0>(ctx.size), std::get<1>(ctx.size), 1 },
+      .usage = WGPUTextureUsage_RenderAttachment,
+      .viewFormatCount = 1,
+      .viewFormats = &depthTextureFormat,
+    };
+    depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
+
     CameraUniform uniformData{
       .view = std::array<float, 16>{
         1,0,0,0,
@@ -511,6 +442,9 @@ public:
   }
 
   ~Application() {
+    wgpuTextureDestroy(depthTexture);
+    wgpuTextureRelease(depthTexture);
+
     ImGui_ImplWGPU_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
@@ -532,42 +466,28 @@ public:
     WGPUTextureView view = ctx.surfaceTextureCreateView();
     std::vector<WGPUCommandBuffer> commands;
 
-    WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
-
-    WGPUTextureDescriptor depthTextureDesc{
-      .dimension = WGPUTextureDimension_2D,
-      .format = depthTextureFormat,
-      .mipLevelCount = 1,
-      .sampleCount = 1,
-      .size = { 1280, 720, 1 },
-      .usage = WGPUTextureUsage_RenderAttachment,
-      .viewFormatCount = 1,
-      .viewFormats = &depthTextureFormat,
-    };
-    WGPUTexture depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
-
-    WGPUTextureViewDescriptor depthTextureViewDesc{
-      .aspect = WGPUTextureAspect_DepthOnly,
-      .baseArrayLayer = 0,
-      .arrayLayerCount = 1,
-      .baseMipLevel = 0,
-      .mipLevelCount = 1,
-      .dimension = WGPUTextureViewDimension_2D,
-      .format = depthTextureFormat,
-    };
-    WGPUTextureView depthTextureView = wgpuTextureCreateView(depthTexture, &depthTextureViewDesc);
-
     {
       WGPUCommandEncoderDescriptor encoderDescriptor{};
       WGPU::CommandEncoder encoder(ctx, &encoderDescriptor);
 
       WGPURenderPassColorAttachment colorAttachment{
-       .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
-       .view = view,
-       .loadOp = WGPULoadOp_Clear,
-       .storeOp = WGPUStoreOp_Store,
-       .clearValue = WGPUColor{ 0., 0., 0., 1. }
+        .depthSlice = WGPU_DEPTH_SLICE_UNDEFINED,
+        .view = view,
+        .loadOp = WGPULoadOp_Clear,
+        .storeOp = WGPUStoreOp_Store,
+        .clearValue = WGPUColor{ 0., 0., 0., 1. }
       };
+
+      WGPUTextureViewDescriptor depthTextureViewDesc{
+        .aspect = WGPUTextureAspect_DepthOnly,
+        .baseArrayLayer = 0,
+        .arrayLayerCount = 1,
+        .baseMipLevel = 0,
+        .mipLevelCount = 1,
+        .dimension = WGPUTextureViewDimension_2D,
+        .format = wgpuTextureGetFormat(depthTexture),
+      };
+      WGPUTextureView depthTextureView = wgpuTextureCreateView(depthTexture, &depthTextureViewDesc);
       WGPURenderPassDepthStencilAttachment depthStencilAttachment{
         .view = depthTextureView,
         .depthClearValue = 1.0f,
@@ -579,6 +499,7 @@ public:
         .stencilStoreOp = WGPUStoreOp_Store,
         .stencilReadOnly = true,
       };
+
       WGPURenderPassDescriptor passDescriptor{
         .colorAttachmentCount = 1,
         .colorAttachments = &colorAttachment,
@@ -591,6 +512,8 @@ public:
 
       WGPUCommandBufferDescriptor commandDescriptor{};
       commands.push_back(encoder.finish(&commandDescriptor));
+
+      wgpuTextureViewRelease(depthTextureView);
     }
 
     ImGui_ImplWGPU_NewFrame();
@@ -643,16 +566,12 @@ public:
     }
     ImGui::Render();
     commands.push_back(ImGui_command(ctx, view));
+    wgpuTextureViewRelease(view);
 
     ctx.submitCommands(commands);
     ctx.releaseCommands(commands);
 
     ctx.present();
-    ctx.surfaceTextureViewRelease(view);
-
-    wgpuTextureViewRelease(depthTextureView);
-    wgpuTextureDestroy(depthTexture);
-    wgpuTextureRelease(depthTexture);
   }
 };
 
