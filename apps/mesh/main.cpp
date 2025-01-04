@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "primitive.hpp"
 #include "math.hpp"
+#include "read_off.hpp"
 
 struct CameraUniform {
   std::array<float, 16> view;
@@ -47,7 +48,7 @@ public:
   WGPU::RenderPipeline pipeline;
 
   GnomonGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
-    vertices(prim::gnomon(1.)),
+    vertices(36),
 
     vertexBuffer(ctx, {
       .label = "vertex",
@@ -111,7 +112,121 @@ public:
     }
       })
   {
+    prim::gnomon(vertices, 1.);
     geom.vertexBuffers[0].buffer.write(vertices.data());
+  }
+
+  void draw(WGPU::RenderPass& pass) {
+    pass.setPipeline(pipeline);
+    pass.draw(geom);
+  }
+};
+
+class MeshGeometry {
+private:
+  std::vector<float> vertices;
+  std::vector<uint16_t> indices;
+
+  const char* shaderSource = R"(
+  struct Camera {
+    view : mat4x4f,
+    proj : mat4x4f,
+  }
+
+  @group(0) @binding(0) var<uniform> camera : Camera;
+  @group(0) @binding(1) var<uniform> model : mat4x4f;
+
+  @vertex fn vs(@location(0) position: vec3f) -> @builtin(position) vec4f {
+
+    return camera.proj * camera.view * model * vec4f(position * 50., 1);
+  }
+
+  @fragment fn fs() -> @location(0) vec4f {
+    return vec4f(pow(vec3f(1), vec3f(2.2)), 1.);
+  }
+  )";
+public:
+  WGPU::Buffer vertexBuffer;
+  WGPU::Buffer indexBuffer;
+  WGPU::IndexedGeometry geom;
+
+  WGPU::RenderPipeline pipeline;
+
+  MeshGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
+    vertices(3395 * 3),
+    indices(6786 * 3),
+    vertexBuffer(ctx, {
+      .label = "vertex",
+      .size = vertices.size() * sizeof(float),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+      .mappedAtCreation = false
+      }),
+    indexBuffer(ctx, {
+      .label = "index",
+      .size = (indices.size() * sizeof(uint16_t) + 3) & ~3, // round up to the next multiple of 4
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
+      .mappedAtCreation = false
+      }),
+    geom{
+      .primitive = {
+        .topology = WGPUPrimitiveTopology_TriangleList,
+        .stripIndexFormat = WGPUIndexFormat_Undefined,
+        .frontFace = WGPUFrontFace_CCW,
+        .cullMode = WGPUCullMode_Back,
+      },
+      .vertexBuffers = {
+        {
+          .buffer = vertexBuffer,
+          .attributes = {
+            {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
+          },
+          .arrayStride = 3 * sizeof(float),
+          .stepMode = WGPUVertexStepMode_Vertex
+        }
+      },
+      .indexBuffer = indexBuffer,
+      .count = static_cast<uint32_t>(indices.size()),
+      },
+    pipeline(ctx, {
+      .source = shaderSource,
+      .bindGroups = bindGroups,
+      .vertex = {
+        .entryPoint = "vs",
+        .buffers = geom.vertexBuffers,
+      },
+      .primitive = geom.primitive,
+      .fragment = {
+        .entryPoint = "fs",
+        .targets = {
+          {
+            .format = ctx.surfaceFormat,
+            .blend = std::make_unique<WGPUBlendState>(WGPUBlendState{
+              .color = {
+                .srcFactor = WGPUBlendFactor_SrcAlpha,
+                .dstFactor = WGPUBlendFactor_OneMinusSrcAlpha,
+                .operation = WGPUBlendOperation_Add
+              },
+              .alpha = {
+                .srcFactor = WGPUBlendFactor_Zero,
+                .dstFactor = WGPUBlendFactor_One,
+                .operation = WGPUBlendOperation_Add
+              }
+            }).get(),
+            .writeMask = WGPUColorWriteMask_All
+          }
+        }
+      },
+      .multisample = {
+        .count = 1,
+        .mask = ~0u,
+        .alphaToCoverageEnabled = false
+      }
+      }
+    )
+  {
+    readOFF("../../data/screwdriver.off", vertices, indices);
+    geom.vertexBuffers[0].buffer.write(vertices.data());
+    geom.indexBuffer.write(indices.data());
   }
 
   void draw(WGPU::RenderPass& pass) {
@@ -126,6 +241,7 @@ public:
   WGPU::Buffer model;
 
   GnomonGeometry gnomon;
+  MeshGeometry mesh;
 
   WGPUTexture depthTexture;
 
@@ -151,7 +267,6 @@ public:
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         .mappedAtCreation = false,
         }),
-
         gnomon(ctx, {
           {
             .label = "camera",
@@ -180,7 +295,36 @@ public:
               }
             }
           }
-          })
+          }),
+    mesh(ctx, {
+      {
+        .label = "camera",
+        .entries = {
+          {
+            .binding = 0,
+            .buffer = &camera,
+            .offset = 0,
+            .visibility = WGPUShaderStage_Vertex,
+            .layout = {
+              .type = WGPUBufferBindingType_Uniform,
+              .hasDynamicOffset = false,
+              .minBindingSize = camera.size,
+              }
+          },
+          {
+            .binding = 1,
+            .buffer = &model,
+            .offset = 0,
+            .visibility = WGPUShaderStage_Vertex,
+            .layout = {
+              .type = WGPUBufferBindingType_Uniform,
+              .hasDynamicOffset = false,
+              .minBindingSize = model.size,
+            }
+          }
+        }
+      }
+      })
   {
     WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
     WGPUTextureDescriptor depthTextureDesc{
@@ -260,6 +404,7 @@ public:
       };
       WGPU::RenderPass pass = encoder.renderPass(&passDescriptor);
       gnomon.draw(pass);
+      mesh.draw(pass);
       pass.end();
 
       WGPUCommandBufferDescriptor commandDescriptor{};

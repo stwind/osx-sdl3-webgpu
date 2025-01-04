@@ -47,7 +47,7 @@ public:
   WGPU::RenderPipeline pipeline;
 
   GnomonGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
-    vertices(prim::gnomon(1.)),
+    vertices(36),
     vertexBuffer(ctx, {
       .label = "vertex",
       .size = vertices.size() * sizeof(float),
@@ -110,6 +110,7 @@ public:
     }
       })
   {
+    prim::gnomon(vertices, 1.);
     geom.vertexBuffers[0].buffer.write(vertices.data());
   }
 
@@ -158,8 +159,8 @@ public:
   WGPU::RenderPipeline pipeline;
 
   CubeGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
-    vertices(std::move(std::get<0>(prim::cube(.5)))),
-    indices(std::move(std::get<1>(prim::cube(.5)))),
+    vertices(144),
+    indices(36),
     vertexBuffer(ctx, {
         .label = "vertex",
         .size = vertices.size() * sizeof(float),
@@ -230,6 +231,7 @@ public:
       }
     )
   {
+    prim::cube(vertices, indices, .5);
     geom.vertexBuffers[0].buffer.write(vertices.data());
     geom.indexBuffer.write(indices.data());
   }

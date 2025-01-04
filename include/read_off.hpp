@@ -4,19 +4,20 @@
 
 template <typename Scalar, typename Index>
 inline bool readOFF(
-  const std::string off_file_name,
+  const std::string file_name,
   std::vector<Scalar>& V,
   std::vector<Index>& F)
 {
   V.clear();
   F.clear();
 
-  FILE* file = fopen(off_file_name.c_str(), "r");
+  FILE* file = fopen(file_name.c_str(), "r");
 
   char header[1000];
   const std::string OFF("OFF");
   const std::string NOFF("NOFF");
   const std::string COFF("COFF");
+
   if (fscanf(file, "%s\n", header) != 1) {
     printf("readOFF() failed, invalid header: %s\n", header);
     fclose(file);

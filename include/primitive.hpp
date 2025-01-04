@@ -3,20 +3,21 @@
 #include <vector>
 
 namespace prim {
-  std::vector<float> gnomon(float s = 1.) {
-    std::vector<float> data{
+  void gnomon(std::vector<float>& V, float s = 1.) {
+    V.resize(36);
+    V.assign({
       0, 0, 0, 1, 0, 0,
       s, 0, 0, 1, 0, 0, // x
       0, 0, 0, 0, 1, 0,
       0, s, 0, 0, 1, 0, // y
       0, 0, 0, 0, 0, 1,
       0, 0, s, 0, 0, 1, // z
-    };
-    return data;
+      });
   };
 
-  std::tuple<std::vector<float>, std::vector<uint16_t>> cube(float s = 1.) {
-    std::vector<float> vertices{
+  void cube(std::vector<float>& V, std::vector<uint16_t>& F, float s = 1.) {
+    V.resize(144);
+    V.assign({
       s, s, -s, 1, 0, 0,
       s, s, s, 1, 0, 0,
       s, -s, s, 1, 0, 0,
@@ -41,9 +42,10 @@ namespace prim {
       s, s, -s, 0, 0, -1,
       s, -s, -s, 0, 0, -1,
       -s, -s, -s, 0, 0, -1,
-    };
+      });
 
-    std::vector<uint16_t> indices{
+    F.resize(36);
+    F.assign({
       0, 1, 2,
       0, 2, 3,
       4, 5, 6,
@@ -56,8 +58,6 @@ namespace prim {
       16, 18, 19,
       20, 21, 22,
       20, 22, 23
-    };
-
-    return { vertices, indices };
+      });
   };
 }
