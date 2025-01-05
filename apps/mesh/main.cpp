@@ -133,20 +133,29 @@ private:
     proj : mat4x4f,
   }
 
+  struct VSOutput {
+    @builtin(position) position: vec4f,
+    @location(0) normal: vec3f,
+  };
+
   @group(0) @binding(0) var<uniform> camera : Camera;
   @group(0) @binding(1) var<uniform> model : mat4x4f;
 
-  @vertex fn vs(@location(0) position: vec3f) -> @builtin(position) vec4f {
+  @vertex fn vs(
+    @location(0) position: vec3f,
+    @location(1) color: vec3f) -> VSOutput {
 
-    return camera.proj * camera.view * model * vec4f(position, 1);
+    var pos = camera.proj * camera.view * model * vec4f(position, 1);
+    return VSOutput(pos, color);
   }
 
-  @fragment fn fs() -> @location(0) vec4f {
-    return vec4f(pow(vec3f(1), vec3f(2.2)), 1.);
+  @fragment fn fs(@location(0) color: vec3f) -> @location(0) vec4f {
+    return vec4f(pow(color, vec3f(2.2)), 1.);
   }
   )";
 public:
-  WGPU::Buffer vertexBuffer;
+  WGPU::Buffer vertexBuffer0;
+  WGPU::Buffer vertexBuffer1;
   WGPU::Buffer indexBuffer;
   WGPU::IndexedGeometry geom;
 
@@ -155,7 +164,13 @@ public:
   MeshGeometry(WGPU::Context& ctx, const std::vector<WGPU::RenderPipeline::BindGroupEntry>& bindGroups) :
     vertices(3395 * 3),
     indices(6786 * 3),
-    vertexBuffer(ctx, {
+    vertexBuffer0(ctx, {
+      .label = "vertex",
+      .size = vertices.size() * sizeof(float),
+      .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
+      .mappedAtCreation = false
+      }),
+    vertexBuffer1(ctx, {
       .label = "vertex",
       .size = vertices.size() * sizeof(float),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
@@ -176,9 +191,17 @@ public:
       },
       .vertexBuffers = {
         {
-          .buffer = vertexBuffer,
+          .buffer = vertexBuffer0,
           .attributes = {
             {.shaderLocation = 0, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
+          },
+          .arrayStride = 3 * sizeof(float),
+          .stepMode = WGPUVertexStepMode_Vertex
+        },
+        {
+          .buffer = vertexBuffer1,
+          .attributes = {
+            {.shaderLocation = 1, .format = WGPUVertexFormat_Float32x3, .offset = 0 },
           },
           .arrayStride = 3 * sizeof(float),
           .stepMode = WGPUVertexStepMode_Vertex
@@ -230,6 +253,13 @@ public:
     mat = (mat.rowwise() - mat.colwise().mean()) / mat.maxCoeff();
 
     geom.vertexBuffers[0].buffer.write(vertices.data());
+
+
+    auto colors = (mat.rowwise() - mat.colwise().minCoeff()).array().rowwise() /
+      (mat.colwise().maxCoeff() - mat.colwise().minCoeff()).array();
+
+    geom.vertexBuffers[1].buffer.write(colors.eval().data());
+
     geom.indexBuffer.write(indices.data());
   }
 
