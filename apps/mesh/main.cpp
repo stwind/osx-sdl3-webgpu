@@ -1,4 +1,3 @@
-#include <Eigen/Core>
 #include <SDL3/SDL.h>
 #include "common.hpp"
 #include "primitive.hpp"
@@ -361,9 +360,10 @@ public:
   }
 
   void render() {
-    math::Vec3 vec;
-    math::Quaternion rot;
-    math::betweenZ(rot, math::sph2cart(vec, { state.phi, state.theta,1. }));
+    Eigen::Vector3f vec;
+    Eigen::Quaternionf rot;
+    math::sph2cart(vec, Eigen::Vector3f(state.phi, state.theta, 1.));
+    math::betweenZ(rot, vec);
 
     Eigen::Matrix4f m;
     math::rotation(m, rot);

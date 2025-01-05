@@ -2,83 +2,61 @@
 
 #include <array>
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 
 namespace math {
   inline float radians(float x) { return x * M_PI / 180.0f; };
 
-  using Vec3 = std::array<float, 3>;
-  using Quaternion = std::array<float, 4>;
-
-  inline Vec3& sph2cart(Vec3& out, const Vec3& v) {
+  inline void sph2cart(Eigen::Ref<Eigen::Vector3f> out, Eigen::Ref<const Eigen::Vector3f> v) {
     float az = v[0], el = v[1], r = v[2];
     float c = std::cos(el);
-    out[0] = c * std::cos(az) * r;
-    out[1] = c * std::sin(az) * r;
-    out[2] = std::sin(el) * r;
-    return out;
+    out(0) = c * std::cos(az) * r;
+    out(1) = c * std::sin(az) * r;
+    out(2) = std::sin(el) * r;
   }
 
-  inline float dot(const Vec3& a, const Vec3& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
-  inline float norm(const Vec3& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
-  inline float norm(const Quaternion& v) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]); }
-
-  inline Vec3& normalize(Vec3& out, const Vec3& v, float eps = 1e-12) {
-    float n = 1. / norm(v);
-    out[0] = v[0] * n; out[1] = v[1] * n; out[2] = v[2] * n;
-    return out;
+  inline void orthogonal(Eigen::Ref<Eigen::Vector3f> out, Eigen::Ref<const Eigen::Vector3f> v, const float m = .5, const float n = .5) {
+    out(0) = m * -v(1) + n * -v(2);
+    out(1) = m * v(0);
+    out(2) = n * v(0);
+    out.normalize();
   }
 
-  inline Quaternion& normalize(Quaternion& out, const Quaternion& v, float eps = 1e-12) {
-    float n = 1. / norm(v);
-    out[0] = v[0] * n; out[1] = v[1] * n; out[2] = v[2] * n; out[3] = v[3] * n;
-    return out;
-  }
-
-  inline Vec3& orthogonal(Vec3& out, const Vec3& v, float m = .5, float n = .5) {
-    out[0] = m * -v[1] + n * -v[2];
-    out[1] = m * v[0];
-    out[2] = n * v[0];
-    return normalize(out, out);
-  }
-
-  inline Quaternion& axisAngle(Quaternion& quat, const Vec3& axis, float rad) {
+  inline void axisAngle(Eigen::Quaternionf& quat, Eigen::Ref<const Eigen::Vector3f> axis, float rad) {
     rad *= .5;
     float s = std::sin(rad);
-    quat[0] = s * axis[0];
-    quat[1] = s * axis[1];
-    quat[2] = s * axis[2];
-    quat[3] = std::cos(rad);
-    return quat;
+    quat.x() = s * axis(0);
+    quat.y() = s * axis(1);
+    quat.z() = s * axis(2);
+    quat.w() = std::cos(rad);
   }
 
-  inline Quaternion& between(Quaternion& out, const Vec3& a, const Vec3& b) {
-    float w = dot(a, b);
-    out[0] = a[1] * b[2] - a[2] * b[1];
-    out[1] = a[2] * b[0] - a[0] * b[2];
-    out[2] = a[0] * b[1] - a[1] * b[0];
-    out[3] = w + std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2] + w * w);
-    if (out[0] == 0. && out[1] == 0. && out[2] == 0. && out[3] == 0.) {
-      Vec3 axis;
-      return axisAngle(out, orthogonal(axis, a), M_PI);
+  inline void between(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> a, Eigen::Ref<const Eigen::Vector3f> b) {
+    float w = a.dot(b);
+    out.x() = a[1] * b[2] - a[2] * b[1];
+    out.y() = a[2] * b[0] - a[0] * b[2];
+    out.z() = a[0] * b[1] - a[1] * b[0];
+    out.w() = w + std::sqrt(out.x() * out.x() + out.y() * out.y() + out.z() * out.z() + w * w);
+    if (out.x() == 0. && out.y() == 0. && out.z() == 0. && out.w() == 0.) {
+      Eigen::Vector3f axis;
+      orthogonal(axis, a);
+      axisAngle(out, axis, M_PI);
     }
-
-    return normalize(out, out);
+    out.normalize();
   }
 
-  inline Quaternion& betweenZ(Quaternion& out, const Vec3& b) {
+  inline void betweenZ(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
     float w = b[2];
-    out[0] = -b[1]; out[1] = b[0]; out[2] = 0.;
-    out[3] = w + std::sqrt(out[0] * out[0] + out[1] * out[1] + w * w);
-    if (out[0] == 0. && out[1] == 0. && out[2] == 0. && out[3] == 0.) {
-      out[1] = 1;
-      return out;
-    }
-
-    return normalize(out, out);
+    out.x() = -b[1]; out.y() = b[0]; out.z() = 0.;
+    out.w() = w + std::sqrt(out.x() * out.x() + out.y() * out.y() + w * w);
+    if (out.x() == 0. && out.y() == 0. && out.z() == 0. && out.w() == 0.)
+      out.y() = 1;
+    else
+      out.normalize();
   }
 
-  inline void rotation(Eigen::Ref<Eigen::Matrix4f> mat, const Quaternion& quat) {
-    float x = quat[0], y = quat[1], z = quat[2], w = quat[3];
+  inline void rotation(Eigen::Ref<Eigen::Matrix4f> mat, const Eigen::Quaternionf& quat) {
+    float x = quat.x(), y = quat.y(), z = quat.z(), w = quat.w();
     float x2 = x + x, y2 = y + y, z2 = z + z;
     float xx = x * x2, xy = x * y2, xz = x * z2;
     float yy = y * y2, yz = y * z2, zz = z * z2;
