@@ -9,10 +9,12 @@ list(PREPEND CMAKE_MODULE_PATH ${ROOT}/cmake/)
 
 cmake_policy(SET CMP0135 NEW)
 
+include(CPM)
 include(utils)
 include(sdl3)
 include(wgpu)
 include(imgui)
+include(eigen)
 
 set(TARGET ${PROJECT_NAME})
 
@@ -34,7 +36,7 @@ target_compile_definitions(${TARGET} PUBLIC
 )
 
 target_link_libraries(${TARGET} 
-PRIVATE SDL3::SDL3 wgpu
+PRIVATE SDL3::SDL3 wgpu Eigen
 "-framework QuartzCore"
 "-framework Cocoa"
 "-framework Metal"

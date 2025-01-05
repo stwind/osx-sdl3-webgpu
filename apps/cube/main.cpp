@@ -270,7 +270,7 @@ public:
       }),
       model(ctx, {
         .label = "model",
-        .size = sizeof(math::Mat44),
+        .size = sizeof(float) * 16,
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         .mappedAtCreation = false,
         }),
@@ -347,9 +347,14 @@ public:
     };
     depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
 
+
     CameraUniform uniformData{};
-    math::perspective(uniformData.proj, math::radians(45), ctx.aspect, .1, 100);
-    math::lookAt(uniformData.view, { 0, 0, 5 }, { 0, 0, -1 }, { 0,1,0 });
+    math::perspective(Eigen::Map<Eigen::Matrix4f>(uniformData.proj.data()),
+      math::radians(45), ctx.aspect, .1, 100);
+    math::lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()),
+      Eigen::Vector3f(0.f, 0.f, 5.f),
+      Eigen::Vector3f(0.f, 0.f, -1.f),
+      Eigen::Vector3f(0.f, 1.f, 0.f));
 
     camera.write(&uniformData);
   }
@@ -360,13 +365,14 @@ public:
   }
 
   void render() {
-    math::Vec3 vec;
-    math::Quaternion rot;
-    math::betweenZ(rot, math::sph2cart(vec, { state.phi, state.theta,1. }));
+    Eigen::Vector3f vec;
+    Eigen::Quaternionf rot;
+    math::sph2cart(vec, Eigen::Vector3f(state.phi, state.theta, 1.));
+    math::betweenZ(rot, vec);
 
-    math::Mat44 m;
+    Eigen::Matrix4f m;
     math::rotation(m, rot);
-    model.write(&m);
+    model.write(m.data());
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
     std::vector<WGPUCommandBuffer> commands;
