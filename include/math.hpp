@@ -8,7 +8,7 @@ namespace math {
   inline float radians(float x) { return x * M_PI / 180.0f; };
 
   inline void sph2cart(Eigen::Ref<Eigen::Vector3f> out, Eigen::Ref<const Eigen::Vector3f> v) {
-    float az = v[0], el = v[1], r = v[2];
+    float az = v(0), el = v(1), r = v(2);
     float c = std::cos(el);
     out(0) = c * std::cos(az) * r;
     out(1) = c * std::sin(az) * r;
@@ -33,9 +33,9 @@ namespace math {
 
   inline void between(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> a, Eigen::Ref<const Eigen::Vector3f> b) {
     float w = a.dot(b);
-    out.x() = a[1] * b[2] - a[2] * b[1];
-    out.y() = a[2] * b[0] - a[0] * b[2];
-    out.z() = a[0] * b[1] - a[1] * b[0];
+    out.x() = a.y() * b.z() - a.z() * b.y();
+    out.y() = a.z() * b.x() - a.x() * b.z();
+    out.z() = a.x() * b.y() - a.y() * b.x();
     out.w() = w + std::sqrt(out.x() * out.x() + out.y() * out.y() + out.z() * out.z() + w * w);
     if (out.x() == 0. && out.y() == 0. && out.z() == 0. && out.w() == 0.) {
       Eigen::Vector3f axis;
@@ -46,8 +46,8 @@ namespace math {
   }
 
   inline void betweenZ(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
-    float w = b[2];
-    out.x() = -b[1]; out.y() = b[0]; out.z() = 0.;
+    float w = b(2);
+    out.x() = -b(1); out.y() = b(0); out.z() = 0.;
     out.w() = w + std::sqrt(out.x() * out.x() + out.y() * out.y() + w * w);
     if (out.x() == 0. && out.y() == 0. && out.z() == 0. && out.w() == 0.)
       out.y() = 1;
@@ -62,10 +62,10 @@ namespace math {
     float yy = y * y2, yz = y * z2, zz = z * z2;
     float wx = w * x2, wy = w * y2, wz = w * z2;
 
-    mat(0, 0) = 1 - (yy + zz); mat(1, 0) = xy + wz; mat(2, 0) = xz - wy; mat(3, 0) = 0;
-    mat(0, 1) = xy - wz; mat(1, 1) = 1 - (xx + zz); mat(2, 1) = yz + wx; mat(3, 1) = 0;
-    mat(0, 2) = xz + wy; mat(1, 2) = yz - wx; mat(3, 2) = 1 - (xx + yy); mat(3, 2) = 0;
-    mat(0, 3) = 0; mat(1, 3) = 0; mat(2, 3) = 0; mat(3, 3) = 1;
+    mat(0, 0) = 1 - (yy + zz); mat(0, 1) = xy + wz; mat(0, 2) = xz - wy; mat(0, 3) = 0;
+    mat(1, 0) = xy - wz; mat(1, 1) = 1 - (xx + zz); mat(1, 2) = yz + wx; mat(1, 3) = 0;
+    mat(2, 0) = xz + wy; mat(2, 1) = yz - wx; mat(2, 2) = 1 - (xx + yy); mat(2, 3) = 0;
+    mat(3, 0) = 0; mat(3, 1) = 0; mat(3, 2) = 0; mat(3, 3) = 1;
   }
 
   inline void perspective(Eigen::Ref<Eigen::Matrix4f> mat, float fov, float aspect, float near, float far) {
