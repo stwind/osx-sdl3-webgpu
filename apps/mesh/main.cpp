@@ -1,3 +1,4 @@
+#include <Eigen/Core>
 #include <SDL3/SDL.h>
 #include "common.hpp"
 #include "primitive.hpp"
@@ -112,7 +113,7 @@ public:
     }
       })
   {
-    prim::gnomon(vertices, 1.);
+    prim::gnomon(vertices, 2.);
     geom.vertexBuffers[0].buffer.write(vertices.data());
   }
 
@@ -138,7 +139,7 @@ private:
 
   @vertex fn vs(@location(0) position: vec3f) -> @builtin(position) vec4f {
 
-    return camera.proj * camera.view * model * vec4f(position * 50., 1);
+    return camera.proj * camera.view * model * vec4f(position, 1);
   }
 
   @fragment fn fs() -> @location(0) vec4f {
@@ -225,6 +226,10 @@ public:
     )
   {
     readOFF("../../data/screwdriver.off", vertices, indices);
+
+    Eigen::Map<Eigen::Matrix<float, 3395, 3, Eigen::RowMajor>> mat(vertices.data(), 3395, 3);
+    mat = (mat.rowwise() - mat.colwise().mean()) / mat.maxCoeff();
+
     geom.vertexBuffers[0].buffer.write(vertices.data());
     geom.indexBuffer.write(indices.data());
   }
