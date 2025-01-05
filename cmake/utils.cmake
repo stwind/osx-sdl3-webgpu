@@ -1,3 +1,4 @@
+include(CPM)
 include(FetchContent)
 
 # https://github.com/eliemichel/WebGPU-distribution/blob/main/webgpu.cmake

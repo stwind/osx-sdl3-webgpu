@@ -9,7 +9,6 @@ list(PREPEND CMAKE_MODULE_PATH ${ROOT}/cmake/)
 
 cmake_policy(SET CMP0135 NEW)
 
-include(CPM)
 include(utils)
 include(sdl3)
 include(wgpu)
