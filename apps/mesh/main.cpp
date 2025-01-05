@@ -6,6 +6,8 @@
 #include "read_off.hpp"
 
 struct CameraUniform {
+  // Eigen::Matrix4f view;
+  // Eigen::Matrix4f proj;
   std::array<float, 16> view;
   std::array<float, 16> proj;
 };
@@ -227,7 +229,7 @@ public:
   {
     readOFF("../../data/screwdriver.off", vertices, indices);
 
-    Eigen::Map<Eigen::Matrix<float, 3395, 3, Eigen::RowMajor>> mat(vertices.data(), 3395, 3);
+    Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mat(vertices.data(), 3395, 3);
     mat = (mat.rowwise() - mat.colwise().mean()) / mat.maxCoeff();
 
     geom.vertexBuffers[0].buffer.write(vertices.data());
@@ -238,6 +240,54 @@ public:
     pass.setPipeline(pipeline);
     pass.draw(geom);
   }
+};
+
+void perspective(Eigen::Ref<Eigen::Matrix4f> mat, float fov, float aspect, float near, float far) {
+  float f = std::tan(M_PI * 0.5 - 0.5 * fov);
+  mat(0, 0) = f / aspect; mat(1, 1) = 0; mat(2, 2) = 0; mat(3, 3) = 0;
+  mat(0, 1) = 0; mat(1, 1) = f; mat(2, 1) = 0; mat(3, 1) = 0;
+  mat(0, 2) = 0; mat(1, 2) = 0; mat(3, 2) = -1;
+  mat(0, 3) = 0; mat(1, 3) = 0; mat(3, 3) = 0;
+
+  if (std::isfinite(far)) {
+    float rangeInv = 1 / (near - far);
+    mat(2, 2) = far * rangeInv;
+    mat(2, 3) = far * near * rangeInv;
+  }
+  else {
+    mat(2, 2) = -1;
+    mat(2, 3) = -near;
+  }
+};
+
+inline void lookAt(
+  Eigen::Ref<Eigen::Matrix4f> mat,
+  Eigen::Ref<const Eigen::Vector3f> eye,
+  Eigen::Ref<const Eigen::Vector3f> dir,
+  Eigen::Ref<const Eigen::Vector3f> up, const float eps = 1e-12) {
+  float ex = eye(0), ey = eye(1), ez = eye(2);
+  float ux = up(0), uy = up(1), uz = up(2);
+  float z0 = -dir(0), z1 = -dir(1), z2 = -dir(2);
+
+  float x0 = uy * z2 - uz * z1;
+  float x1 = uz * z0 - ux * z2;
+  float x2 = ux * z1 - uy * z0;
+  float len = 1 / (std::sqrt(x0 * x0 + x1 * x1 + x2 * x2) + eps);
+  x0 *= len; x1 *= len; x2 *= len;
+
+  float y0 = z1 * x2 - z2 * x1;
+  float y1 = z2 * x0 - z0 * x2;
+  float y2 = z0 * x1 - z1 * x0;
+  len = 1 / (std::sqrt(y0 * y0 + y1 * y1 + y2 * y2) + eps);
+  y0 *= len; y1 *= len; y2 *= len;
+
+  mat(0, 0) = x0; mat(1, 0) = y0; mat(2, 0) = z0; mat(3, 0) = 0;
+  mat(0, 1) = x1; mat(1, 1) = y1; mat(2, 1) = z1; mat(3, 1) = 0;
+  mat(0, 2) = x2; mat(1, 2) = y2; mat(2, 2) = z2; mat(3, 2) = 0;
+  mat(0, 3) = -(x0 * ex + x1 * ey + x2 * ez);
+  mat(1, 3) = -(y0 * ex + y1 * ey + y2 * ez);
+  mat(2, 3) = -(z0 * ex + z1 * ey + z2 * ez);
+  mat(3, 3) = 1;
 };
 
 class Application : public WGPUApplication {
@@ -345,8 +395,13 @@ public:
     depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
 
     CameraUniform uniformData{};
-    math::perspective(uniformData.proj, math::radians(45), ctx.aspect, .1, 100);
-    math::lookAt(uniformData.view, { 0, 0, 5 }, { 0, 0, -1 }, { 0,1,0 });
+    Eigen::Map<Eigen::Matrix4f> proj(uniformData.proj.data(), 4, 4);
+    Eigen::Map<Eigen::Matrix4f> view(uniformData.view.data(), 4, 4);
+    perspective(proj, math::radians(45), ctx.aspect, .1, 100);
+    lookAt(view,
+      Eigen::Vector3f(0.f, 0.f, 5.f),
+      Eigen::Vector3f(0.f, 0.f, -1.f),
+      Eigen::Vector3f(0.f, 1.f, 0.f));
 
     camera.write(&uniformData);
   }
