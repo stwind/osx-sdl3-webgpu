@@ -23,18 +23,22 @@ public:
   }
 };
 
-class Object3d {
-public:
+struct Object3d {
   Eigen::Vector3f position;
   Eigen::Quaternionf rotation;
   Eigen::Vector3f up;
+};
 
-  Object3d(
-    const Eigen::Vector3f& position,
-    const Eigen::Quaternionf& rotation,
-    const Eigen::Vector3f& up) : position(position), rotation(rotation), up(up)
-  {
-  }
+struct Perspective {
+  float fov;
+  float aspect;
+  float near;
+  float far;
+};
+
+struct Camera {
+  Object3d object;
+  Perspective perspective;
 };
 
 class ArcBall {
@@ -57,7 +61,7 @@ public:
   }
 };
 
-class ArcBallControl {
+class OrbitControl {
 public:
   Eigen::Vector3f t0;
   Eigen::Vector3f up;

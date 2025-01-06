@@ -273,16 +273,28 @@ inline void lookAt(Eigen::Ref<Eigen::Matrix4f> mat, const Object3d& obj) {
 
 class Application : public WGPUApplication {
 public:
-  WGPU::Buffer camera;
-  WGPU::Buffer model;
+  WGPU::Buffer uCamera;
+  WGPU::Buffer uModel;
 
   GnomonGeometry gnomon;
   MeshGeometry mesh;
 
   WGPUTexture depthTexture;
-  Object3d cameraObj;
 
-  ArcBallControl arcballCtrl;
+  Camera camera{
+    .object{
+      .position = Eigen::Vector3f(0.f, 0.f, 5.f),
+      .rotation = Eigen::Quaternionf{ 0,0,1,0 },
+      .up = Eigen::Vector3f(0, 1, 0)
+    },
+    .perspective{
+      .fov = math::radians(45),
+      .aspect = ctx.aspect,
+      .near = .1,
+      .far = 100.
+    }
+  };
+  OrbitControl orbit;
 
   struct {
     bool isDown = false;
@@ -291,46 +303,46 @@ public:
   } state;
 
   Application() : WGPUApplication(1280, 720),
-    camera(ctx, {
-    .label = "camera",
+    uCamera(ctx, {
+      .label = "camera",
       .size = sizeof(CameraUniform),
       .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
       .mappedAtCreation = false,
       }),
-      model(ctx, {
+      uModel(ctx, {
         .label = "model",
         .size = sizeof(float) * 16,
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         .mappedAtCreation = false,
         }),
         gnomon(ctx, {
-          {
-            .label = "camera",
-            .entries = {
-              {
-                .binding = 0,
-                .buffer = &camera,
-                .offset = 0,
-                .visibility = WGPUShaderStage_Vertex,
-                .layout = {
-                  .type = WGPUBufferBindingType_Uniform,
-                  .hasDynamicOffset = false,
-                  .minBindingSize = camera.size,
+            {
+              .label = "camera",
+              .entries = {
+                {
+                  .binding = 0,
+                  .buffer = &uCamera,
+                  .offset = 0,
+                  .visibility = WGPUShaderStage_Vertex,
+                  .layout = {
+                    .type = WGPUBufferBindingType_Uniform,
+                    .hasDynamicOffset = false,
+                    .minBindingSize = uCamera.size,
+                    }
+                },
+                {
+                  .binding = 1,
+                  .buffer = &uModel,
+                  .offset = 0,
+                  .visibility = WGPUShaderStage_Vertex,
+                  .layout = {
+                    .type = WGPUBufferBindingType_Uniform,
+                    .hasDynamicOffset = false,
+                    .minBindingSize = uModel.size,
                   }
-              },
-              {
-                .binding = 1,
-                .buffer = &model,
-                .offset = 0,
-                .visibility = WGPUShaderStage_Vertex,
-                .layout = {
-                  .type = WGPUBufferBindingType_Uniform,
-                  .hasDynamicOffset = false,
-                  .minBindingSize = model.size,
                 }
               }
             }
-          }
           }),
     mesh(ctx, {
       {
@@ -338,33 +350,29 @@ public:
         .entries = {
           {
             .binding = 0,
-            .buffer = &camera,
+            .buffer = &uCamera,
             .offset = 0,
             .visibility = WGPUShaderStage_Vertex,
             .layout = {
               .type = WGPUBufferBindingType_Uniform,
               .hasDynamicOffset = false,
-              .minBindingSize = camera.size,
+              .minBindingSize = uCamera.size,
               }
           },
           {
             .binding = 1,
-            .buffer = &model,
+            .buffer = &uModel,
             .offset = 0,
             .visibility = WGPUShaderStage_Vertex,
             .layout = {
               .type = WGPUBufferBindingType_Uniform,
               .hasDynamicOffset = false,
-              .minBindingSize = model.size,
+              .minBindingSize = uModel.size,
             }
           }
         }
       }
-      }),
-    cameraObj(
-      Eigen::Vector3f(0.f, 0.f, 5.f),
-      Eigen::Quaternionf{ 0,0,1,0 },
-      Eigen::Vector3f(0, 1, 0))
+      })
   {
     WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
     WGPUTextureDescriptor depthTextureDesc{
@@ -390,14 +398,15 @@ public:
     Eigen::Quaternionf rot;
     Eigen::Matrix4f m;
     math::rotation(m, math::betweenZ(rot, math::sph2cart(vec, state.dir)));
-    model.write(m.data());
+    uModel.write(m.data());
 
     CameraUniform uniformData{};
     math::perspective(Eigen::Map<Eigen::Matrix4f>(uniformData.proj.data()),
-      math::radians(45), ctx.aspect, .1, 100);
+      camera.perspective.fov, camera.perspective.aspect,
+      camera.perspective.near, camera.perspective.far);
 
-    lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()), cameraObj);
-    camera.write(&uniformData);
+    lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()), camera.object);
+    uCamera.write(&uniformData);
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
     std::vector<WGPUCommandBuffer> commands;
@@ -463,9 +472,9 @@ public:
     mouse.x() *= ctx.aspect;
 
     if (state.isDown != ImGui::IsMouseDown(0) && !state.isDown)
-      arcballCtrl.begin(cameraObj, mouse);
+      orbit.begin(camera.object, mouse);
     if ((state.isDown = ImGui::IsMouseDown(0)))
-      arcballCtrl.end(cameraObj, Eigen::Vector3f(0, 0, 0), mouse);
+      orbit.end(camera.object, Eigen::Vector3f(0, 0, 0), mouse);
 
     {
       ImGui::SetNextWindowPos(ImVec2(10, 120), ImGuiCond_Once);

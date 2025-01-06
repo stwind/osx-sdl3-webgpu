@@ -10,9 +10,7 @@ namespace math {
   inline Eigen::Ref<Eigen::Vector3f> sph2cart(Eigen::Ref<Eigen::Vector3f> out, Eigen::Ref<const Eigen::Vector3f> v) {
     float az = v(0), el = v(1), r = v(2);
     float c = std::cos(el);
-    out(0) = c * std::cos(az) * r;
-    out(1) = c * std::sin(az) * r;
-    out(2) = std::sin(el) * r;
+    out << c * std::cos(az) * r, c* std::sin(az)* r, std::sin(el)* r;
     return out;
   }
 
@@ -76,11 +74,8 @@ namespace math {
 
   inline Eigen::Quaternionf& invert(Eigen::Quaternionf& out, const Eigen::Quaternionf& quat) {
     float dot = quat.x() * quat.x() + quat.y() * quat.y() + quat.z() * quat.z() + quat.w() * quat.w();
-    float invDot = dot == 0. ? 0 : 1. / dot;
-    out.x() = -quat.x() * invDot;
-    out.y() = -quat.y() * invDot;
-    out.z() = -quat.z() * invDot;
-    out.w() = quat.w() * invDot;
+    float inv = dot == 0. ? 0 : 1. / dot;
+    out.coeffs() << -quat.x() * inv, -quat.y() * inv, -quat.z() * inv, quat.w()* inv;
     return out;
   }
 
