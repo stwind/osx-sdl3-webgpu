@@ -7,12 +7,13 @@
 namespace math {
   inline float radians(float x) { return x * M_PI / 180.0f; };
 
-  inline void sph2cart(Eigen::Ref<Eigen::Vector3f> out, Eigen::Ref<const Eigen::Vector3f> v) {
+  inline Eigen::Ref<Eigen::Vector3f> sph2cart(Eigen::Ref<Eigen::Vector3f> out, Eigen::Ref<const Eigen::Vector3f> v) {
     float az = v(0), el = v(1), r = v(2);
     float c = std::cos(el);
     out(0) = c * std::cos(az) * r;
     out(1) = c * std::sin(az) * r;
     out(2) = std::sin(el) * r;
+    return out;
   }
 
   inline void orthogonal(Eigen::Ref<Eigen::Vector3f> out, Eigen::Ref<const Eigen::Vector3f> v, const float m = .5, const float n = .5) {
@@ -25,14 +26,11 @@ namespace math {
   inline Eigen::Quaternionf& axisAngle(Eigen::Quaternionf& quat, Eigen::Ref<const Eigen::Vector3f> axis, float rad) {
     rad *= .5;
     float s = std::sin(rad);
-    quat.x() = s * axis(0);
-    quat.y() = s * axis(1);
-    quat.z() = s * axis(2);
-    quat.w() = std::cos(rad);
+    quat.coeffs() << s * axis(0), s* axis(1), s* axis(2), std::cos(rad);
     return quat;
   }
 
-  inline void between(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> a, Eigen::Ref<const Eigen::Vector3f> b) {
+  inline Eigen::Quaternionf& between(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> a, Eigen::Ref<const Eigen::Vector3f> b) {
     float w = a.dot(b);
     out.x() = a.y() * b.z() - a.z() * b.y();
     out.y() = a.z() * b.x() - a.x() * b.z();
@@ -44,9 +42,10 @@ namespace math {
       axisAngle(out, axis, M_PI);
     }
     out.normalize();
+    return out;
   }
 
-  inline void betweenY(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
+  inline Eigen::Quaternionf& betweenY(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
     float w = b(1);
     out.x() = b.z(); out.y() = 0.; out.z() = -b.x();
     out.w() = w + std::sqrt(out.x() * out.x() + out.z() * out.z() + w * w);
@@ -54,9 +53,10 @@ namespace math {
       out.x() = 1;
     else
       out.normalize();
+    return out;
   }
 
-  inline void betweenZ(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
+  inline Eigen::Quaternionf& betweenZ(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
     float w = b(2);
     out.x() = -b(1); out.y() = b(0); out.z() = 0.;
     out.w() = w + std::sqrt(out.x() * out.x() + out.y() * out.y() + w * w);
@@ -64,6 +64,7 @@ namespace math {
       out.y() = 1;
     else
       out.normalize();
+    return out;
   }
 
   inline Eigen::Ref<Eigen::Vector3f> mulVZ(Eigen::Ref<Eigen::Vector3f> out, const Eigen::Quaternionf quat) {
@@ -143,4 +144,11 @@ namespace math {
     mat(2, 3) = -(z0 * ex + z1 * ey + z2 * ez);
     mat(3, 3) = 1;
   };
+
+  inline Eigen::Ref<Eigen::Vector3f> arcballHolroyd(Eigen::Ref<Eigen::Vector3f> out, Eigen::Vector2f p, float radius = 2.) {
+    float r2 = radius * radius, h = p.squaredNorm();
+    float z = h <= r2 * .5f ? std::sqrt(r2 - h) : r2 / (2.f * std::sqrt(h));
+    out << p.x(), p.y(), z;
+    return out;
+  }
 }
