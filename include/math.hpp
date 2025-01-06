@@ -65,6 +65,13 @@ namespace math {
       out.normalize();
   }
 
+  inline Eigen::Ref<Eigen::Vector3f> mulVZ(Eigen::Ref<Eigen::Vector3f> out, const Eigen::Quaternionf quat) {
+    out.x() = (quat.y() * quat.w() + quat.z() * quat.x()) * 2.f;
+    out.y() = (quat.z() * quat.y() - quat.x() * quat.w()) * 2.f;
+    out.z() = quat.w() * quat.w() + quat.z() * quat.z() - quat.y() * quat.y() - quat.x() * quat.x();
+    return out;
+  }
+
   inline void invert(Eigen::Quaternionf& out, const Eigen::Quaternionf& quat) {
     float dot = quat.x() * quat.x() + quat.y() * quat.y() + quat.z() * quat.z() + quat.w() * quat.w();
     float invDot = dot == 0. ? 0 : 1. / dot;

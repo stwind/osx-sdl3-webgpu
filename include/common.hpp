@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wgpu.hpp"
+#include "math.hpp"
 #include "imgui.hpp"
 
 class WGPUApplication {
@@ -19,5 +20,19 @@ public:
 
   void processEvent(const SDL_Event* event) {
     ImGui_ImplSDL3_ProcessEvent(event);
+  }
+};
+
+class Object3d {
+public:
+  Eigen::Vector3f position;
+  Eigen::Quaternionf rotation;
+  Eigen::Vector3f up;
+
+  Object3d(
+    const Eigen::Vector3f& position,
+    const Eigen::Quaternionf& rotation,
+    const Eigen::Vector3f& up) : position(position), rotation(rotation), up(up)
+  {
   }
 };
