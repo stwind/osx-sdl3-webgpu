@@ -244,61 +244,71 @@ public:
 
 class Application : public WGPUApplication {
 public:
-  WGPU::Buffer camera;
-  WGPU::Buffer model;
+  WGPU::Buffer uCamera;
+  WGPU::Buffer uModel;
 
   GnomonGeometry gnomon;
   CubeGeometry cube;
 
   WGPUTexture depthTexture;
 
+  Camera camera{
+  .object{
+    .position = Eigen::Vector3f(0.f, 0.f, 5.f),
+    .rotation = Eigen::Quaternionf{ 0,0,1,0 },
+    .up = Eigen::Vector3f(0, 1, 0)
+  },
+  .perspective{
+    .fov = math::radians(45),
+    .aspect = ctx.aspect,
+    .near = .1,
+    .far = 100.
+  }
+  };
+  OrbitControl orbit;
+
   struct {
     bool isDown = false;
-    ImVec2 downPos = { -1,-1 };
-    ImVec2 delta = { 0,0 };
-
-    float phi = 0;
-    float theta = M_PI_2;
+    Eigen::Vector3f dir = { 0, M_PI_2,1 };
   } state;
 
   Application() : WGPUApplication(1278, 720),
-    camera(ctx, {
+    uCamera(ctx, {
       .label = "camera",
         .size = sizeof(CameraUniform),
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         .mappedAtCreation = false,
       }),
-      model(ctx, {
+      uModel(ctx, {
         .label = "model",
         .size = sizeof(float) * 16,
         .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
         .mappedAtCreation = false,
         }),
-
         gnomon(ctx, {
           {
             .label = "camera",
             .entries = {
               {
                 .binding = 0,
-                .buffer = &camera,
+                .buffer = &uCamera,
                 .offset = 0,
                 .visibility = WGPUShaderStage_Vertex,
                 .layout = {
                   .type = WGPUBufferBindingType_Uniform,
                   .hasDynamicOffset = false,
-                  .minBindingSize = camera.size,
+                  .minBindingSize = uCamera.size,
                   }
               },
               {
                 .binding = 1,
-                .buffer = &model,
+                .buffer = &uModel,
                 .offset = 0,
                 .visibility = WGPUShaderStage_Vertex,
                 .layout = {
                   .type = WGPUBufferBindingType_Uniform,
                   .hasDynamicOffset = false,
-                  .minBindingSize = model.size,
+                  .minBindingSize = uModel.size,
                 }
               }
             }
@@ -310,24 +320,24 @@ public:
           .entries = {
             {
               .binding = 0,
-              .buffer = &camera,
+              .buffer = &uCamera,
               .offset = 0,
               .visibility = WGPUShaderStage_Vertex,
               .layout = {
                 .type = WGPUBufferBindingType_Uniform,
                 .hasDynamicOffset = false,
-                .minBindingSize = camera.size,
+                .minBindingSize = uCamera.size,
                 }
             },
             {
               .binding = 1,
-              .buffer = &model,
+              .buffer = &uModel,
               .offset = 0,
               .visibility = WGPUShaderStage_Vertex,
               .layout = {
                 .type = WGPUBufferBindingType_Uniform,
                 .hasDynamicOffset = false,
-                .minBindingSize = model.size,
+                .minBindingSize = uModel.size,
               }
             }
           }
@@ -346,17 +356,6 @@ public:
       .viewFormats = &depthTextureFormat,
     };
     depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
-
-
-    CameraUniform uniformData{};
-    math::perspective(Eigen::Map<Eigen::Matrix4f>(uniformData.proj.data()),
-      math::radians(45), ctx.aspect, .1, 100);
-    math::lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()),
-      Eigen::Vector3f(0.f, 0.f, 5.f),
-      Eigen::Vector3f(0.f, 0.f, -1.f),
-      Eigen::Vector3f(0.f, 1.f, 0.f));
-
-    camera.write(&uniformData);
   }
 
   ~Application() {
@@ -367,12 +366,17 @@ public:
   void render() {
     Eigen::Vector3f vec;
     Eigen::Quaternionf rot;
-    math::sph2cart(vec, Eigen::Vector3f(state.phi, state.theta, 1.));
-    math::betweenZ(rot, vec);
-
     Eigen::Matrix4f m;
-    math::rotation(m, rot);
-    model.write(m.data());
+    math::rotation(m, math::betweenZ(rot, math::sph2cart(vec, state.dir)));
+    uModel.write(m.data());
+
+    CameraUniform uniformData{};
+    math::perspective(Eigen::Map<Eigen::Matrix4f>(uniformData.proj.data()),
+      camera.perspective.fov, camera.perspective.aspect,
+      camera.perspective.near, camera.perspective.far);
+
+    lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()), camera.object);
+    uCamera.write(&uniformData);
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
     std::vector<WGPUCommandBuffer> commands;
@@ -432,49 +436,27 @@ public:
     ImGui::NewFrame();
     ImGuiIO& io = ImGui::GetIO();
 
-    if (state.isDown != ImGui::IsMouseDown(0)) {
-      if (!state.isDown) {
-        state.downPos.x = io.MousePos.x;
-        state.downPos.y = io.MousePos.y;
-      }
-      else {
-        state.downPos.x = -1.;
-        state.downPos.y = -1.;
-      }
-    }
-    state.isDown = ImGui::IsMouseDown(0);
-    if (state.isDown) {
-      state.delta.x = io.MousePos.x - state.downPos.x;
-      state.delta.y = io.MousePos.y - state.downPos.y;
-    }
-    else {
-      state.delta.x = 0.;
-      state.delta.y = 0.;
+    if (!io.WantCaptureMouse) {
+      Eigen::Vector2f mouse(io.MousePos.x / std::get<0>(ctx.size), io.MousePos.y / std::get<1>(ctx.size));
+      mouse *= 2.;
+      mouse.array() -= 1.;
+      mouse.x() *= ctx.aspect;
+      if (state.isDown != ImGui::IsMouseDown(0) && !state.isDown)
+        orbit.begin(camera.object, mouse);
+      if ((state.isDown = ImGui::IsMouseDown(0)))
+        orbit.end(camera.object, Eigen::Vector3f(0, 0, 0), mouse);
     }
 
     {
-      ImGui::SetNextWindowPos(ImVec2(10, 120), ImGuiCond_Once);
+      ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
       ImGui::SetNextWindowSize(ImVec2(200, 0), ImGuiCond_Once);
       ImGui::Begin("Controls");
-      ImGui::SliderFloat("phi", &state.phi, 0.0f, M_PI * 2.);
-      ImGui::SliderFloat("theta", &state.theta, -M_PI_2, M_PI_2);
+      ImGui::SliderFloat("phi", &state.dir.x(), 0.0f, M_PI * 2.);
+      ImGui::SliderFloat("theta", &state.dir.y(), -M_PI_2, M_PI_2);
 
       ImGui::End();
     }
 
-    {
-      ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-      ImGui::SetNextWindowSize(ImVec2(200, 70), ImGuiCond_Once);
-      ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-
-      if (ImGui::IsMousePosValid())
-        ImGui::Text("Mouse pos: (%g, %g)", io.MousePos.x, io.MousePos.y);
-
-      ImGui::Text("down pos: (%g, %g)", state.downPos.x, state.downPos.y);
-      ImGui::Text("delta: (%g, %g)", state.delta.x, state.delta.y);
-
-      ImGui::End();
-    }
     ImGui::Render();
     commands.push_back(ImGui_command(ctx, view));
     wgpuTextureViewRelease(view);

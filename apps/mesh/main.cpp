@@ -266,11 +266,6 @@ public:
   }
 };
 
-inline void lookAt(Eigen::Ref<Eigen::Matrix4f> mat, const Object3d& obj) {
-  Eigen::Vector3f dir;
-  math::lookAt(mat, obj.position, math::mulVZ(dir, obj.rotation), obj.up);
-}
-
 class Application : public WGPUApplication {
 public:
   WGPU::Buffer uCamera;
@@ -466,18 +461,19 @@ public:
     ImGui::NewFrame();
     ImGuiIO& io = ImGui::GetIO();
 
-    Eigen::Vector2f mouse(io.MousePos.x / std::get<0>(ctx.size), io.MousePos.y / std::get<1>(ctx.size));
-    mouse *= 2.;
-    mouse.array() -= 1.;
-    mouse.x() *= ctx.aspect;
-
-    if (state.isDown != ImGui::IsMouseDown(0) && !state.isDown)
-      orbit.begin(camera.object, mouse);
-    if ((state.isDown = ImGui::IsMouseDown(0)))
-      orbit.end(camera.object, Eigen::Vector3f(0, 0, 0), mouse);
+    if (!io.WantCaptureMouse) {
+      Eigen::Vector2f mouse(io.MousePos.x / std::get<0>(ctx.size), io.MousePos.y / std::get<1>(ctx.size));
+      mouse *= 2.;
+      mouse.array() -= 1.;
+      mouse.x() *= ctx.aspect;
+      if (state.isDown != ImGui::IsMouseDown(0) && !state.isDown)
+        orbit.begin(camera.object, mouse);
+      if ((state.isDown = ImGui::IsMouseDown(0)))
+        orbit.end(camera.object, Eigen::Vector3f(0, 0, 0), mouse);
+    }
 
     {
-      ImGui::SetNextWindowPos(ImVec2(10, 120), ImGuiCond_Once);
+      ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
       ImGui::SetNextWindowSize(ImVec2(200, 0), ImGuiCond_Once);
       ImGui::Begin("Controls");
       ImGui::SliderFloat("phi", &state.dir.x(), 0.0f, M_PI * 2.);

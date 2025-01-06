@@ -36,6 +36,11 @@ struct Perspective {
   float far;
 };
 
+inline void lookAt(Eigen::Ref<Eigen::Matrix4f> mat, const Object3d& obj) {
+  Eigen::Vector3f dir;
+  math::lookAt(mat, obj.position, math::mulVZ(dir, obj.rotation), obj.up);
+}
+
 struct Camera {
   Object3d object;
   Perspective perspective;
