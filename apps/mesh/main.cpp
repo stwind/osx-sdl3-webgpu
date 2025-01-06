@@ -460,7 +460,7 @@ public:
     Eigen::Vector2f mouse(io.MousePos.x / std::get<0>(ctx.size), io.MousePos.y / std::get<1>(ctx.size));
     mouse *= 2.;
     mouse.array() -= 1.;
-    mouse.array() *= Eigen::Array2f(ctx.aspect, -1);
+    mouse.x() *= ctx.aspect;
 
     if (state.isDown != ImGui::IsMouseDown(0) && !state.isDown)
       arcballCtrl.begin(cameraObj, mouse);

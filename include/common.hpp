@@ -51,7 +51,7 @@ public:
     Eigen::Vector3f p1;
     Eigen::Vector3f delta = p0 - math::arcballHolroyd(p1, p);
     float angle = delta.squaredNorm() * speed;
-    Eigen::Vector3f axis(delta.y(), delta.x(), 0);
+    Eigen::Vector3f axis(-delta.y(), delta.x(), 0);
     axis.normalize();
     return math::axisAngle(out, rot * axis, angle);
   }
