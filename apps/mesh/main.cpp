@@ -251,13 +251,10 @@ public:
 
     Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mat(vertices.data(), 3395, 3);
     mat = (mat.rowwise() - mat.colwise().mean()) / mat.maxCoeff();
-
     geom.vertexBuffers[0].buffer.write(vertices.data());
-
 
     auto colors = (mat.rowwise() - mat.colwise().minCoeff()).array().rowwise() /
       (mat.colwise().maxCoeff() - mat.colwise().minCoeff()).array();
-
     geom.vertexBuffers[1].buffer.write(colors.eval().data());
 
     geom.indexBuffer.write(indices.data());
@@ -269,6 +266,81 @@ public:
   }
 };
 
+inline void arcballHolroyd(Eigen::Ref<Eigen::Vector3f> out, Eigen::Vector2f p, float radius = 2.) {
+  float r2 = radius * radius, h = p.squaredNorm();
+  float z = h <= r2 * .5f ? std::sqrt(r2 - h) : r2 / (2.f * std::sqrt(h));
+  out.x() = p.x();
+  out.y() = p.y();
+  out.z() = z;
+}
+
+inline void mulVZ(Eigen::Ref<Eigen::Vector3f> out, const Eigen::Quaternionf quat) {
+  out.x() = (quat.y() * quat.w() + quat.z() * quat.x()) * 2.f;
+  out.y() = (quat.z() * quat.y() - quat.x() * quat.w()) * 2.f;
+  out.z() = quat.w() * quat.w() + quat.z() * quat.z() - quat.y() * quat.y() - quat.x() * quat.x();
+}
+
+struct Object3d {
+  Eigen::Vector3f position;
+  Eigen::Quaternionf rotation;
+  Eigen::Vector3f up;
+};
+
+class TrackBall {
+public:
+  Eigen::Vector3f p0;
+  Eigen::Quaternionf rot;
+
+  void begin(const Eigen::Vector2f& p, const Eigen::Vector3f& up) {
+    arcballHolroyd(p0, p);
+    math::betweenY(rot, up);
+  }
+
+  void end(Eigen::Quaternionf& out, const Eigen::Vector2f& p, const float speed = 2.) {
+    Eigen::Vector3f p1;
+    arcballHolroyd(p1, p);
+    Eigen::Vector3f delta = p0 - p1;
+    float angle = delta.squaredNorm() * speed;
+    Eigen::Vector3f axis(delta.y(), delta.x(), 0);
+    axis.normalize();
+    math::axisAngle(out, rot * axis, angle);
+  }
+};
+
+class Orbiter {
+public:
+  Eigen::Vector3f t0;
+  Eigen::Vector3f up;
+  Eigen::Quaternionf r0;
+  Eigen::Quaternionf inv;
+
+  TrackBall trackball;
+
+  void begin(Object3d& obj, const Eigen::Vector2f& p) {
+    math::invert(inv, obj.rotation);
+    up = inv * obj.up;
+
+    trackball.begin(p, up);
+    t0 = obj.position;
+    r0.coeffs() = obj.rotation.coeffs();
+  }
+
+  void end(Object3d& obj, const Eigen::Vector3f& target, const Eigen::Vector2f& p) {
+    Eigen::Quaternionf rot;
+    trackball.end(rot, p);
+
+    obj.rotation = r0 * rot;
+    obj.position = (obj.rotation * inv) * (t0 - target) + target;
+    obj.up = obj.rotation * up;
+  }
+};
+
+inline void lookAt(Eigen::Ref<Eigen::Matrix4f> mat, const Object3d& obj) {
+  Eigen::Vector3f dir;
+  mulVZ(dir, obj.rotation);
+  math::lookAt(mat, obj.position, dir, obj.up);
+}
+
 class Application : public WGPUApplication {
 public:
   WGPU::Buffer camera;
@@ -278,14 +350,20 @@ public:
   MeshGeometry mesh;
 
   WGPUTexture depthTexture;
+  Object3d cameraObj{
+    .position = Eigen::Vector3f(0.f, 0.f, 5.f),
+    .rotation = Eigen::Quaternionf{0,0,1,0},
+    .up = Eigen::Vector3f(0,1,0),
+  };
+
+  Orbiter orbiter;
 
   struct {
     bool isDown = false;
-    ImVec2 downPos = { -1,-1 };
-    ImVec2 delta = { 0,0 };
+    Eigen::Vector2f downPos = { -1,-1 };
+    Eigen::Vector2f delta = { 0,0 };
 
-    float phi = 0;
-    float theta = M_PI_2;
+    Eigen::Vector3f dir = { 0, M_PI_2,1 };
   } state;
 
   Application() : WGPUApplication(1280, 720),
@@ -373,15 +451,12 @@ public:
     };
     depthTexture = wgpuDeviceCreateTexture(ctx.device, &depthTextureDesc);
 
-    CameraUniform uniformData{};
-    math::perspective(Eigen::Map<Eigen::Matrix4f>(uniformData.proj.data()),
-      math::radians(45), ctx.aspect, .1, 100);
-    math::lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()),
-      Eigen::Vector3f(0.f, 0.f, 5.f),
-      Eigen::Vector3f(0.f, 0.f, -1.f),
-      Eigen::Vector3f(0.f, 1.f, 0.f));
+    // CameraUniform uniformData{};
+    // math::perspective(Eigen::Map<Eigen::Matrix4f>(uniformData.proj.data()),
+    //   math::radians(45), ctx.aspect, .1, 100);
 
-    camera.write(&uniformData);
+    // lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()), cameraObj);
+    // camera.write(&uniformData);
   }
 
   ~Application() {
@@ -391,13 +466,20 @@ public:
 
   void render() {
     Eigen::Vector3f vec;
+    math::sph2cart(vec, state.dir);
     Eigen::Quaternionf rot;
-    math::sph2cart(vec, Eigen::Vector3f(state.phi, state.theta, 1.));
     math::betweenZ(rot, vec);
 
     Eigen::Matrix4f m;
     math::rotation(m, rot);
     model.write(m.data());
+
+    CameraUniform uniformData{};
+    math::perspective(Eigen::Map<Eigen::Matrix4f>(uniformData.proj.data()),
+      math::radians(45), ctx.aspect, .1, 100);
+
+    lookAt(Eigen::Map<Eigen::Matrix4f>(uniformData.view.data()), cameraObj);
+    camera.write(&uniformData);
 
     WGPUTextureView view = ctx.surfaceTextureCreateView();
     std::vector<WGPUCommandBuffer> commands;
@@ -457,46 +539,46 @@ public:
     ImGui::NewFrame();
     ImGuiIO& io = ImGui::GetIO();
 
+    Eigen::Vector2f mouse(io.MousePos.x / std::get<0>(ctx.size), io.MousePos.y / std::get<1>(ctx.size));
+    mouse *= 2.;
+    mouse.array() -= 1.;
+    mouse.array() *= Eigen::Array2f(ctx.aspect, -1);
+
     if (state.isDown != ImGui::IsMouseDown(0)) {
       if (!state.isDown) {
-        state.downPos.x = io.MousePos.x;
-        state.downPos.y = io.MousePos.y;
+        state.downPos << mouse.x(), mouse.y();
+        orbiter.begin(cameraObj, mouse);
       }
-      else {
-        state.downPos.x = -1.;
-        state.downPos.y = -1.;
-      }
+      else
+        state.downPos << -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity();
     }
     state.isDown = ImGui::IsMouseDown(0);
     if (state.isDown) {
-      state.delta.x = io.MousePos.x - state.downPos.x;
-      state.delta.y = io.MousePos.y - state.downPos.y;
+      state.delta << mouse.x() - state.downPos.x(), mouse.y() - state.downPos.y();
+
+      orbiter.end(cameraObj, Eigen::Vector3f(0, 0, 0), mouse);
     }
     else {
-      state.delta.x = 0.;
-      state.delta.y = 0.;
+      state.delta << 0, 0;
     }
 
     {
       ImGui::SetNextWindowPos(ImVec2(10, 120), ImGuiCond_Once);
       ImGui::SetNextWindowSize(ImVec2(200, 0), ImGuiCond_Once);
       ImGui::Begin("Controls");
-      ImGui::SliderFloat("phi", &state.phi, 0.0f, M_PI * 2.);
-      ImGui::SliderFloat("theta", &state.theta, -M_PI_2, M_PI_2);
+      ImGui::SliderFloat("phi", &state.dir.x(), 0.0f, M_PI * 2.);
+      ImGui::SliderFloat("theta", &state.dir.y(), -M_PI_2, M_PI_2);
 
       ImGui::End();
     }
 
     {
       ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-      ImGui::SetNextWindowSize(ImVec2(200, 70), ImGuiCond_Once);
+      ImGui::SetNextWindowSize(ImVec2(250, 50), ImGuiCond_Once);
       ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 
-      if (ImGui::IsMousePosValid())
-        ImGui::Text("Mouse pos: (%g, %g)", io.MousePos.x, io.MousePos.y);
-
-      ImGui::Text("down pos: (%g, %g)", state.downPos.x, state.downPos.y);
-      ImGui::Text("delta: (%g, %g)", state.delta.x, state.delta.y);
+      ImGui::Text("down pos: (%g, %g)", state.downPos.x(), state.downPos.y());
+      ImGui::Text("delta: (%g, %g)", state.delta.x(), state.delta.y());
 
       ImGui::End();
     }

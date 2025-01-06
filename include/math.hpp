@@ -45,6 +45,16 @@ namespace math {
     out.normalize();
   }
 
+  inline void betweenY(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
+    float w = b(1);
+    out.x() = b.z(); out.y() = 0.; out.z() = -b.x();
+    out.w() = w + std::sqrt(out.x() * out.x() + out.z() * out.z() + w * w);
+    if (out.x() == 0. && out.y() == 0. && out.z() == 0. && out.w() == 0.)
+      out.x() = 1;
+    else
+      out.normalize();
+  }
+
   inline void betweenZ(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> b) {
     float w = b(2);
     out.x() = -b(1); out.y() = b(0); out.z() = 0.;
@@ -53,6 +63,15 @@ namespace math {
       out.y() = 1;
     else
       out.normalize();
+  }
+
+  inline void invert(Eigen::Quaternionf& out, const Eigen::Quaternionf& quat) {
+    float dot = quat.x() * quat.x() + quat.y() * quat.y() + quat.z() * quat.z() + quat.w() * quat.w();
+    float invDot = dot == 0. ? 0 : 1. / dot;
+    out.x() = -quat.x() * invDot;
+    out.y() = -quat.y() * invDot;
+    out.z() = -quat.z() * invDot;
+    out.w() = quat.w() * invDot;
   }
 
   inline void rotation(Eigen::Ref<Eigen::Matrix4f> mat, const Eigen::Quaternionf& quat) {
