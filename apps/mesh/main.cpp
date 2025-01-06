@@ -266,10 +266,11 @@ public:
   }
 };
 
-inline void arcballHolroyd(Eigen::Ref<Eigen::Vector3f> out, Eigen::Vector2f p, float radius = 2.) {
+inline Eigen::Ref<Eigen::Vector3f> arcballHolroyd(Eigen::Ref<Eigen::Vector3f> out, Eigen::Vector2f p, float radius = 2.) {
   float r2 = radius * radius, h = p.squaredNorm();
   float z = h <= r2 * .5f ? std::sqrt(r2 - h) : r2 / (2.f * std::sqrt(h));
   out << p.x(), p.y(), z;
+  return out;
 }
 
 class ArcBall {
@@ -282,14 +283,13 @@ public:
     math::betweenY(rot, up);
   }
 
-  void end(Eigen::Quaternionf& out, const Eigen::Vector2f& p, const float speed = 2.) {
+  Eigen::Quaternionf& end(Eigen::Quaternionf& out, const Eigen::Vector2f& p, const float speed = 2.) {
     Eigen::Vector3f p1;
-    arcballHolroyd(p1, p);
-    Eigen::Vector3f delta = p0 - p1;
+    Eigen::Vector3f delta = p0 - arcballHolroyd(p1, p);
     float angle = delta.squaredNorm() * speed;
     Eigen::Vector3f axis(delta.y(), delta.x(), 0);
     axis.normalize();
-    math::axisAngle(out, rot * axis, angle);
+    return math::axisAngle(out, rot * axis, angle);
   }
 };
 
@@ -303,8 +303,7 @@ public:
   ArcBall arcball;
 
   void begin(Object3d& obj, const Eigen::Vector2f& p) {
-    math::invert(inv, obj.rotation);
-    up = inv * obj.up;
+    up = math::invert(inv, obj.rotation) * obj.up;
 
     arcball.begin(p, up);
     t0 = obj.position;
@@ -313,9 +312,8 @@ public:
 
   void end(Object3d& obj, const Eigen::Vector3f& target, const Eigen::Vector2f& p) {
     Eigen::Quaternionf rot;
-    arcball.end(rot, p);
 
-    obj.rotation = r0 * rot;
+    obj.rotation = r0 * arcball.end(rot, p);
     obj.position = (obj.rotation * inv) * (t0 - target) + target;
     obj.up = obj.rotation * up;
   }

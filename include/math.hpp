@@ -22,13 +22,14 @@ namespace math {
     out.normalize();
   }
 
-  inline void axisAngle(Eigen::Quaternionf& quat, Eigen::Ref<const Eigen::Vector3f> axis, float rad) {
+  inline Eigen::Quaternionf& axisAngle(Eigen::Quaternionf& quat, Eigen::Ref<const Eigen::Vector3f> axis, float rad) {
     rad *= .5;
     float s = std::sin(rad);
     quat.x() = s * axis(0);
     quat.y() = s * axis(1);
     quat.z() = s * axis(2);
     quat.w() = std::cos(rad);
+    return quat;
   }
 
   inline void between(Eigen::Quaternionf& out, Eigen::Ref<const Eigen::Vector3f> a, Eigen::Ref<const Eigen::Vector3f> b) {
@@ -72,13 +73,14 @@ namespace math {
     return out;
   }
 
-  inline void invert(Eigen::Quaternionf& out, const Eigen::Quaternionf& quat) {
+  inline Eigen::Quaternionf& invert(Eigen::Quaternionf& out, const Eigen::Quaternionf& quat) {
     float dot = quat.x() * quat.x() + quat.y() * quat.y() + quat.z() * quat.z() + quat.w() * quat.w();
     float invDot = dot == 0. ? 0 : 1. / dot;
     out.x() = -quat.x() * invDot;
     out.y() = -quat.y() * invDot;
     out.z() = -quat.z() * invDot;
     out.w() = quat.w() * invDot;
+    return out;
   }
 
   inline void rotation(Eigen::Ref<Eigen::Matrix4f> mat, const Eigen::Quaternionf& quat) {
