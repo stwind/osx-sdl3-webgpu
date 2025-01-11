@@ -49,11 +49,9 @@ struct Camera {
 class ArcBall {
 public:
   Eigen::Vector3f p0;
-  Eigen::Quaternionf rot;
 
-  void begin(const Eigen::Vector2f& p, const Eigen::Vector3f& up) {
+  void begin(const Eigen::Vector2f& p) {
     math::arcballHolroyd(p0, p);
-    math::betweenY(rot, up);
   }
 
   Eigen::Quaternionf& end(Eigen::Quaternionf& out, const Eigen::Vector2f& p, const float speed = 2.) {
@@ -62,7 +60,7 @@ public:
     float angle = delta.squaredNorm() * speed;
     Eigen::Vector3f axis(-delta.y(), delta.x(), 0);
     axis.normalize();
-    return math::axisAngle(out, rot * axis, angle);
+    return math::axisAngle(out, axis, angle);
   }
 };
 
@@ -73,20 +71,25 @@ public:
   Eigen::Quaternionf r0;
   Eigen::Quaternionf inv;
 
+  Eigen::Quaternionf rot;
+  Eigen::Quaternionf ru;
+
   ArcBall arcball;
+  Object3d& obj;
 
-  void begin(Object3d& obj, const Eigen::Vector2f& p) {
+  OrbitControl(Object3d& obj) : obj(obj) {}
+
+  void begin(const Eigen::Vector2f& p) {
     up = math::invert(inv, obj.rotation) * obj.up;
+    math::betweenY(ru, up);
 
-    arcball.begin(p, up);
+    arcball.begin(p);
     t0 = obj.position;
     r0.coeffs() = obj.rotation.coeffs();
   }
 
-  void end(Object3d& obj, const Eigen::Vector3f& target, const Eigen::Vector2f& p) {
-    Eigen::Quaternionf rot;
-
-    obj.rotation = r0 * arcball.end(rot, p);
+  void end(const Eigen::Vector2f& p, const Eigen::Vector3f& target) {
+    obj.rotation = r0 * ru * arcball.end(rot, p);
     obj.position = (obj.rotation * inv) * (t0 - target) + target;
     obj.up = obj.rotation * up;
   }

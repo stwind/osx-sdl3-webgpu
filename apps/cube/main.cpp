@@ -342,7 +342,8 @@ public:
             }
           }
         }
-      })
+      }),
+    orbit(camera.object)
   {
     WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
     WGPUTextureDescriptor depthTextureDesc{
@@ -442,9 +443,9 @@ public:
       mouse.array() -= 1.;
       mouse.x() *= ctx.aspect;
       if (state.isDown != ImGui::IsMouseDown(0) && !state.isDown)
-        orbit.begin(camera.object, mouse);
+        orbit.begin(mouse);
       if ((state.isDown = ImGui::IsMouseDown(0)))
-        orbit.end(camera.object, Eigen::Vector3f(0, 0, 0), mouse);
+        orbit.end(mouse, Eigen::Vector3f(0, 0, 0));
     }
 
     {
