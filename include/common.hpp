@@ -54,13 +54,12 @@ public:
     math::arcballHolroyd(p0, p);
   }
 
-  Eigen::Quaternionf& end(Eigen::Quaternionf& out, const Eigen::Vector2f& p, const float speed = 2.) {
+  Eigen::Quaternionf& end(Eigen::Quaternionf& out, const Eigen::Vector2f& p) {
     Eigen::Vector3f p1;
     Eigen::Vector3f delta = p0 - math::arcballHolroyd(p1, p);
-    float angle = delta.squaredNorm() * speed;
     Eigen::Vector3f axis(-delta.y(), delta.x(), 0);
     axis.normalize();
-    return math::axisAngle(out, axis, angle);
+    return math::axisAngle(out, axis, delta.squaredNorm());
   }
 };
 
@@ -69,9 +68,8 @@ public:
   Eigen::Vector3f t0;
   Eigen::Vector3f up;
   Eigen::Quaternionf r0;
-  Eigen::Quaternionf inv;
 
-  Eigen::Quaternionf rot;
+  Eigen::Quaternionf inv;
   Eigen::Quaternionf ru;
 
   ArcBall arcball;
@@ -80,15 +78,17 @@ public:
   OrbitControl(Object3d& obj) : obj(obj) {}
 
   void begin(const Eigen::Vector2f& p) {
+    arcball.begin(p);
+
     up = math::invert(inv, obj.rotation) * obj.up;
     math::betweenY(ru, up);
 
-    arcball.begin(p);
     t0 = obj.position;
     r0.coeffs() = obj.rotation.coeffs();
   }
 
   void end(const Eigen::Vector2f& p, const Eigen::Vector3f& target) {
+    Eigen::Quaternionf rot;
     obj.rotation = r0 * ru * arcball.end(rot, p);
     obj.position = (obj.rotation * inv) * (t0 - target) + target;
     obj.up = obj.rotation * up;
